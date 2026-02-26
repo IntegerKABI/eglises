@@ -1,0 +1,37 @@
+{% extends "admin_dashboard/base_dashboard.html" %}
+{% load crispy_forms_tags %}
+{% block title %}Paramètres de la plateforme{% endblock %}
+
+{% block dashboard_content %}
+<div class="skeleton-container">
+    <div class="skeleton skeleton-title mb-4" style="width:300px;"></div>
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+            {% for i in "12345" %}
+            <div class="mb-3">
+                <div class="skeleton skeleton-text" style="width:120px;"></div>
+                <div class="skeleton" style="height:38px; width:100%;"></div>
+            </div>
+            {% endfor %}
+            <div class="skeleton skeleton-btn mt-3"></div>
+        </div>
+    </div>
+</div>
+
+<div class="page-content">
+<h1 class="mb-4"><i class="bi bi-sliders"></i> Paramètres de la plateforme</h1>
+<p class="text-muted">Ces paramètres s'appliquent à l'ensemble du site, pour toutes les églises.</p>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-4">
+        <form method="post" enctype="multipart/form-data" data-ajax>
+            {% csrf_token %}
+            {{ form|crispy }}
+            <button type="submit" class="btn btn-church btn-lg mt-3">
+                <i class="bi bi-check-lg"></i> Enregistrer
+            </button>
+        </form>
+    </div>
+</div>
+</div>
+{% endblock %}

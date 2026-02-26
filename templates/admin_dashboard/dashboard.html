@@ -1,0 +1,126 @@
+{% extends "admin_dashboard/base_dashboard.html" %}
+{% block title %}Dashboard — {{ church.name }}{% endblock %}
+
+{% block dashboard_content %}
+<div class="skeleton-container">
+    <div class="skeleton skeleton-title mb-4" style="width:250px;"></div>
+    <div class="row g-4 mb-5">
+        {% for i in "1234" %}
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="skeleton skeleton-stat mx-auto"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="row g-4">
+        {% for i in "12" %}
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white">
+                    <div class="skeleton skeleton-text" style="width:180px;"></div>
+                </div>
+                <div class="card-body">
+                    {% for j in "123" %}
+                    <div class="d-flex justify-content-between align-items-center py-2 {% if not forloop.last %}border-bottom{% endif %}">
+                        <div>
+                            <div class="skeleton skeleton-text" style="width:150px;"></div>
+                            <div class="skeleton skeleton-text mt-1" style="width:100px;"></div>
+                        </div>
+                        <div class="skeleton skeleton-btn" style="width:40px;"></div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="page-content">
+<h1 class="mb-4"><i class="bi bi-speedometer2"></i> Tableau de bord</h1>
+
+<!-- Cartes statistiques -->
+<div class="row g-4 mb-5">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3">
+            <i class="bi bi-people display-4 text-primary"></i>
+            <h2 class="mt-2">{{ total_members }}</h2>
+            <p class="text-muted">Membres</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3">
+            <i class="bi bi-calendar-event display-4 text-success"></i>
+            <h2 class="mt-2">{{ total_events }}</h2>
+            <p class="text-muted">Événements</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3">
+            <i class="bi bi-book display-4 text-warning"></i>
+            <h2 class="mt-2">{{ total_sermons }}</h2>
+            <p class="text-muted">Prédications</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3">
+            <i class="bi bi-envelope display-4 text-danger"></i>
+            <h2 class="mt-2">{{ unread_messages_count }}</h2>
+            <p class="text-muted">Messages non lus</p>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Événements à venir -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-calendar-event"></i> Événements à venir</h5>
+                <a href="{% url 'add_event' %}" class="btn btn-sm btn-church">+ Ajouter</a>
+            </div>
+            <div class="card-body">
+                {% for event in upcoming_events %}
+                <div class="d-flex justify-content-between align-items-center py-2 {% if not forloop.last %}border-bottom{% endif %}">
+                    <div>
+                        <strong>{{ event.title }}</strong><br>
+                        <small class="text-muted">{{ event.event_date|date:"d/m/Y" }} {% if event.event_time %}à {{ event.event_time|time:"H:i" }}{% endif %}</small>
+                    </div>
+                    <a href="{% url 'edit_event' event.pk %}" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                </div>
+                {% empty %}
+                <p class="text-muted text-center">Aucun événement à venir</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Messages récents -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white">
+                <h5 class="mb-0"><i class="bi bi-envelope"></i> Messages récents</h5>
+            </div>
+            <div class="card-body">
+                {% for msg in recent_messages %}
+                <div class="d-flex justify-content-between align-items-center py-2 {% if not forloop.last %}border-bottom{% endif %}">
+                    <div>
+                        <strong>{{ msg.sender_name }}</strong><br>
+                        <small class="text-muted">{{ msg.subject|default:"Sans sujet" }} — {{ msg.created_at|date:"d/m/Y H:i" }}</small>
+                    </div>
+                    <a href="{% url 'read_message' msg.pk %}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-eye"></i>
+                    </a>
+                </div>
+                {% empty %}
+                <p class="text-muted text-center">Aucun nouveau message</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+{% endblock %}

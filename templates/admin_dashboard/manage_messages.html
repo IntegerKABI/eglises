@@ -1,0 +1,84 @@
+{% extends "admin_dashboard/base_dashboard.html" %}
+{% block title %}Messages — {{ church.name }}{% endblock %}
+
+{% block dashboard_content %}
+<div class="skeleton-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="skeleton skeleton-title" style="width:200px;"></div>
+        <div class="skeleton skeleton-btn"></div>
+    </div>
+    <div class="card border-0 shadow-sm">
+        <div class="card-body">
+            <table class="table">
+                <thead class="table-light">
+                    <tr>
+                        <th><div class="skeleton skeleton-table-cell" style="width:100px;"></div></th>
+                        <th><div class="skeleton skeleton-table-cell" style="width:80px;"></div></th>
+                        <th><div class="skeleton skeleton-table-cell" style="width:80px;"></div></th>
+                        <th><div class="skeleton skeleton-table-cell" style="width:60px;"></div></th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for i in "123" %}
+                    <tr>
+                        <td><div class="skeleton skeleton-text" style="width:150px;"></div></td>
+                        <td><div class="skeleton skeleton-text" style="width:80px;"></div></td>
+                        <td><div class="skeleton skeleton-text" style="width:80px;"></div></td>
+                        <td><div class="skeleton skeleton-badge"></div></td>
+                        <td class="text-end"><div class="skeleton skeleton-btn" style="width:70px;"></div></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="page-content">
+<h1 class="mb-4"><i class="bi bi-envelope"></i> Messages</h1>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Expéditeur</th>
+                        <th>Sujet</th>
+                        <th>Date</th>
+                        <th>Lu</th>
+                        <th class="text-end">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for msg in messages %}
+                    <tr class="{% if not msg.is_read %}fw-bold{% endif %}">
+                        <td>{{ msg.sender_name }}</td>
+                        <td>{{ msg.subject|default:"Sans sujet" }}</td>
+                        <td>{{ msg.created_at|date:"d/m/Y H:i" }}</td>
+                        <td>
+                            {% if msg.is_read %}
+                                <span class="badge bg-success">Lu</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">Non lu</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <a href="{% url 'read_message' msg.pk %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> Voir
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">Aucun message reçu</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+</div>
+{% endblock %}

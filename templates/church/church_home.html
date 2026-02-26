@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+
+{% block title %}{{ church.name }}{% endblock %}
+
+{% block content %}
+<!-- Skeleton -->
+<div class="skeleton-container">
+    <div style="min-height: 400px; background: #2a2a3e;">
+        <div class="container py-5 text-center">
+            <div class="skeleton skeleton-title mx-auto" style="width: 300px;"></div>
+            <div class="skeleton skeleton-text mx-auto" style="width: 250px;"></div>
+            <div class="skeleton skeleton-text mx-auto" style="width: 400px;"></div>
+        </div>
+    </div>
+    <div class="container py-5">
+        <div class="skeleton skeleton-title" style="width: 280px;"></div>
+        <div class="row g-4 mb-5">
+            <div class="col-md-6 col-lg-4">
+                <div class="card skeleton-card h-100">
+                    <div class="skeleton skeleton-img"></div>
+                    <div class="card-body">
+                        <div class="skeleton skeleton-title"></div>
+                        <div class="skeleton skeleton-text w-75"></div>
+                        <div class="skeleton skeleton-text w-50"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card skeleton-card h-100">
+                    <div class="skeleton skeleton-img"></div>
+                    <div class="card-body">
+                        <div class="skeleton skeleton-title"></div>
+                        <div class="skeleton skeleton-text w-75"></div>
+                        <div class="skeleton skeleton-text w-50"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card skeleton-card h-100">
+                    <div class="skeleton skeleton-img"></div>
+                    <div class="card-body">
+                        <div class="skeleton skeleton-title"></div>
+                        <div class="skeleton skeleton-text w-75"></div>
+                        <div class="skeleton skeleton-text w-50"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="skeleton skeleton-title" style="width: 300px;"></div>
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-4">
+                <div class="card skeleton-card h-100">
+                    <div class="skeleton skeleton-img"></div>
+                    <div class="card-body">
+                        <div class="skeleton skeleton-title"></div>
+                        <div class="skeleton skeleton-text w-75"></div>
+                        <div class="skeleton skeleton-text w-50"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card skeleton-card h-100">
+                    <div class="skeleton skeleton-img"></div>
+                    <div class="card-body">
+                        <div class="skeleton skeleton-title"></div>
+                        <div class="skeleton skeleton-text w-75"></div>
+                        <div class="skeleton skeleton-text w-50"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card skeleton-card h-100">
+                    <div class="skeleton skeleton-img"></div>
+                    <div class="card-body">
+                        <div class="skeleton skeleton-title"></div>
+                        <div class="skeleton skeleton-text w-75"></div>
+                        <div class="skeleton skeleton-text w-50"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Contenu réel -->
+<div class="page-content">
+    <!-- Hero de l'église -->
+    <div class="position-relative text-white" style="min-height: 400px; background: linear-gradient(135deg, {{ church.primary_color }}, {{ church.secondary_color }});">
+        {% if church.cover_image %}
+        <div class="position-absolute top-0 start-0 w-100 h-100" style="background: url('{{ church.cover_image.url }}') center/cover; opacity: 0.3;"></div>
+        {% endif %}
+        <div class="container position-relative py-5 text-center">
+            {% if church.logo %}
+                <img src="{{ church.logo.url }}" alt="{{ church.name }}" height="100" class="mb-3 rounded-circle bg-white p-2">
+            {% else %}
+                <i class="bi bi-church" style="font-size: 5rem;"></i>
+            {% endif %}
+            <h1 class="display-5 fw-bold">{{ church.name }}</h1>
+            {% if church.pastor_name %}
+                <p class="lead"><i class="bi bi-person"></i> {{ church.pastor_name }}</p>
+            {% endif %}
+            {% if church.welcome_message %}
+                <p class="fs-5 mt-3">{{ church.welcome_message }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="container py-5">
+        <!-- Horaires des cultes -->
+        {% if church.service_times %}
+        <div class="row mb-5">
+            <div class="col-lg-8 mx-auto">
+                <div class="card shadow-sm border-0">
+                    <div class="card-body text-center p-4">
+                        <h3 class="text-church"><i class="bi bi-clock"></i> Horaires des cultes</h3>
+                        <p class="fs-5 mt-3">{{ church.service_times|linebreaksbr }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Événements à venir -->
+        {% if upcoming_events %}
+        <section class="mb-5">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="text-church"><i class="bi bi-calendar-event"></i> Événements à venir</h2>
+                <a href="{% url 'church_events' church.slug %}" class="btn btn-outline-secondary">Voir tout</a>
+            </div>
+            <div class="row g-4">
+                {% for event in upcoming_events %}
+                <div class="col-md-4">
+                    <div class="card h-100 shadow-sm border-0">
+                        {% if event.image %}
+                            <img src="{{ event.image.url }}" class="card-img-top" style="height: 180px; object-fit: cover;" alt="">
+                        {% endif %}
+                        <div class="card-body">
+                            <h5 class="card-title">{{ event.title }}</h5>
+                            <p class="text-muted mb-1"><i class="bi bi-calendar3"></i> {{ event.event_date|date:"d F Y" }}</p>
+                            {% if event.event_time %}<p class="text-muted mb-1"><i class="bi bi-clock"></i> {{ event.event_time|time:"H:i" }}</p>{% endif %}
+                            {% if event.location %}<p class="text-muted"><i class="bi bi-geo-alt"></i> {{ event.location }}</p>{% endif %}
+                            {% if event.description %}<p class="card-text">{{ event.description|truncatewords:15 }}</p>{% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
+        <!-- Dernières prédications -->
+        {% if latest_sermons %}
+        <section class="mb-5">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="text-church"><i class="bi bi-book"></i> Dernières prédications</h2>
+                <a href="{% url 'church_sermons' church.slug %}" class="btn btn-outline-secondary">Voir tout</a>
+            </div>
+            <div class="row g-4">
+                {% for sermon in latest_sermons %}
+                <div class="col-md-4">
+                    <div class="card h-100 shadow-sm border-0">
+                        {% if sermon.image %}
+                            <img src="{{ sermon.image.url }}" class="card-img-top" style="height: 180px; object-fit: cover;" alt="">
+                        {% endif %}
+                        <div class="card-body">
+                            <h5 class="card-title">{{ sermon.title }}</h5>
+                            {% if sermon.preacher %}<p class="text-muted mb-1"><i class="bi bi-person"></i> {{ sermon.preacher }}</p>{% endif %}
+                            {% if sermon.bible_reference %}<p class="text-muted mb-1"><i class="bi bi-bookmark"></i> {{ sermon.bible_reference }}</p>{% endif %}
+                            {% if sermon.sermon_date %}<p class="text-muted"><i class="bi bi-calendar3"></i> {{ sermon.sermon_date|date:"d F Y" }}</p>{% endif %}
+                            {% if sermon.video_url %}
+                                <a href="{{ sermon.video_url }}" target="_blank" class="btn btn-sm btn-church mt-2">
+                                    <i class="bi bi-play-circle"></i> Regarder
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
+        <!-- Infos de contact -->
+        <section>
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body p-4">
+                            <h3 class="text-church"><i class="bi bi-info-circle"></i> Nous trouver</h3>
+                            {% if church.address %}<p><i class="bi bi-geo-alt"></i> {{ church.address }}, {{ church.city }}</p>{% endif %}
+                            {% if church.phone %}<p><i class="bi bi-telephone"></i> {{ church.phone }}</p>{% endif %}
+                            {% if church.email %}<p><i class="bi bi-envelope"></i> {{ church.email }}</p>{% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6 mt-3 mt-lg-0">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body p-4 text-center">
+                            <h3 class="text-church"><i class="bi bi-chat-heart"></i> Besoin de parler ?</h3>
+                            <p>N'hésitez pas à nous contacter. Nous sommes là pour vous.</p>
+                            <a href="{% url 'church_contact' church.slug %}" class="btn btn-church btn-lg">
+                                <i class="bi bi-envelope"></i> Nous écrire
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{# BASE_DASHBOARD.HTML — Layout du tableau de bord avec sidebar #}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- ========== SIDEBAR ========== -->
+        <nav class="col-md-3 col-lg-2 bg-light sidebar py-4" style="min-height: calc(100vh - 76px);">
+            <div class="px-3">
+                <h6 class="text-uppercase text-muted mb-3">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </h6>
+                <ul class="nav flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'dashboard' %}">
+                            <i class="bi bi-house"></i> Vue d'ensemble
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'church_settings' %}">
+                            <i class="bi bi-gear"></i> Paramètres
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'manage_events' %}">
+                            <i class="bi bi-calendar-event"></i> Événements
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'manage_sermons' %}">
+                            <i class="bi bi-book"></i> Prédications
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'manage_members' %}">
+                            <i class="bi bi-people"></i> Membres
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'manage_messages' %}">
+                            <i class="bi bi-envelope"></i> Messages
+                            {% if unread_messages_count %}
+                                <span class="badge bg-danger">{{ unread_messages_count }}</span>
+                            {% endif %}
+                        </a>
+                    </li>
+                </ul>
+                {% if user.is_superuser %}
+                <hr>
+                <h6 class="text-uppercase text-muted mb-3">
+                    <i class="bi bi-shield-lock"></i> Super Admin
+                </h6>
+                <ul class="nav flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'site_settings' %}">
+                            <i class="bi bi-sliders"></i> Paramètres plateforme
+                        </a>
+                    </li>
+                </ul>
+                {% endif %}
+                <hr>
+                <ul class="nav flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'church_home' church.slug %}" target="_blank">
+                            <i class="bi bi-eye"></i> Voir le site
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+        <!-- ========== CONTENU PRINCIPAL ========== -->
+        <main class="col-md-9 col-lg-10 px-4 py-4">
+            {% block dashboard_content %}{% endblock %}
+        </main>
+    </div>
+</div>
+{% endblock %}

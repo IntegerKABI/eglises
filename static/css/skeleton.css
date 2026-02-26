@@ -1,0 +1,144 @@
+/* =================================================================
+   SKELETON LOADING — Animations de chargement
+   ================================================================= */
+
+@keyframes skeleton-pulse {
+    0%   { opacity: 0.6; }
+    50%  { opacity: 1; }
+    100% { opacity: 0.6; }
+}
+
+/* Base skeleton element */
+.skeleton {
+    background: linear-gradient(90deg, #e9ecef 25%, #f8f9fa 50%, #e9ecef 75%);
+    background-size: 200% 100%;
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+    border-radius: 4px;
+}
+
+/* Skeleton shapes */
+.skeleton-text       { height: 14px; margin-bottom: 10px; }
+.skeleton-title      { height: 24px; width: 60%; margin-bottom: 16px; }
+.skeleton-img        { height: 200px; width: 100%; border-radius: .375rem .375rem 0 0; }
+.skeleton-btn        { height: 40px; width: 130px; border-radius: .375rem; display: inline-block; }
+.skeleton-avatar     { width: 50px; height: 50px; border-radius: 50%; }
+.skeleton-stat       { height: 70px; width: 80px; margin: 0 auto; border-radius: .5rem; }
+.skeleton-hero       { height: 400px; width: 100%; }
+.skeleton-badge      { height: 22px; width: 60px; border-radius: 50rem; display: inline-block; }
+
+/* Skeleton card */
+.skeleton-card {
+    border: none;
+    box-shadow: 0 .125rem .25rem rgba(0,0,0,.075);
+    border-radius: .375rem;
+    overflow: hidden;
+}
+
+/* Skeleton table row */
+.skeleton-table-cell { height: 16px; border-radius: 4px; }
+
+/* ===== Page content transitions ===== */
+.skeleton-container {
+    transition: opacity 0.3s ease, max-height 0.3s ease;
+}
+.skeleton-container.skeleton-hidden {
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    pointer-events: none;
+    position: absolute;
+}
+
+.page-content {
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.page-content.content-loaded {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* ===== Toast notifications ===== */
+.toast-container-custom {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 9999;
+}
+
+.toast-custom {
+    min-width: 300px;
+    padding: 16px 20px;
+    border-radius: .5rem;
+    color: #fff;
+    font-weight: 500;
+    box-shadow: 0 8px 30px rgba(0,0,0,.15);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: toast-in 0.4s ease;
+    margin-bottom: 10px;
+}
+.toast-custom.toast-success { background: #198754; }
+.toast-custom.toast-error   { background: #dc3545; }
+.toast-custom.toast-warning { background: #ffc107; color: #000; }
+.toast-custom.toast-info    { background: #0dcaf0; color: #000; }
+
+.toast-custom.toast-out {
+    animation: toast-out 0.3s ease forwards;
+}
+
+@keyframes toast-in {
+    from { opacity: 0; transform: translateX(40px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes toast-out {
+    from { opacity: 1; transform: translateX(0); }
+    to   { opacity: 0; transform: translateX(40px); }
+}
+
+/* ===== Form loading state ===== */
+.form-loading {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.6;
+}
+.form-loading::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255,255,255,0.4);
+    border-radius: .375rem;
+}
+
+.btn-loading {
+    position: relative;
+    pointer-events: none;
+}
+.btn-loading .btn-text { visibility: hidden; }
+.btn-loading::after {
+    content: '';
+    position: absolute;
+    width: 20px; height: 20px;
+    top: 50%; left: 50%;
+    margin: -10px 0 0 -10px;
+    border: 3px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: btn-spin 0.6s linear infinite;
+}
+@keyframes btn-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ===== Delete row animation ===== */
+.row-removing {
+    transition: all 0.4s ease;
+    opacity: 0;
+    transform: translateX(-20px);
+    max-height: 0;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden;
+}

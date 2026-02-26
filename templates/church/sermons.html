@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Prédications — {{ church.name }}{% endblock %}
+
+{% block content %}
+<!-- Skeleton -->
+<div class="skeleton-container">
+    <div class="container py-5">
+        <div class="skeleton skeleton-title" style="width: 250px;"></div>
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-4">
+                <div class="card skeleton-card h-100">
+                    <div class="skeleton skeleton-img"></div>
+                    <div class="card-body">
+                        <div class="skeleton skeleton-title"></div>
+                        <div class="skeleton skeleton-text w-75"></div>
+                        <div class="skeleton skeleton-text w-50"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card skeleton-card h-100">
+                    <div class="skeleton skeleton-img"></div>
+                    <div class="card-body">
+                        <div class="skeleton skeleton-title"></div>
+                        <div class="skeleton skeleton-text w-75"></div>
+                        <div class="skeleton skeleton-text w-50"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card skeleton-card h-100">
+                    <div class="skeleton skeleton-img"></div>
+                    <div class="card-body">
+                        <div class="skeleton skeleton-title"></div>
+                        <div class="skeleton skeleton-text w-75"></div>
+                        <div class="skeleton skeleton-text w-50"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Contenu réel -->
+<div class="page-content">
+    <div class="container py-5">
+        <h1 class="text-church mb-4"><i class="bi bi-book"></i> Prédications</h1>
+
+        <div class="row g-4">
+            {% for sermon in sermons %}
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 shadow-sm border-0">
+                    {% if sermon.image %}
+                        <img src="{{ sermon.image.url }}" class="card-img-top" style="height: 200px; object-fit: cover;" alt="">
+                    {% else %}
+                        <div class="card-img-top d-flex align-items-center justify-content-center bg-light" style="height: 200px;">
+                            <i class="bi bi-book text-muted" style="font-size: 3rem;"></i>
+                        </div>
+                    {% endif %}
+                    <div class="card-body">
+                        <h5 class="card-title">{{ sermon.title }}</h5>
+                        {% if sermon.preacher %}<p class="text-muted mb-1"><i class="bi bi-person"></i> {{ sermon.preacher }}</p>{% endif %}
+                        {% if sermon.bible_reference %}<p class="text-muted mb-1"><i class="bi bi-bookmark"></i> {{ sermon.bible_reference }}</p>{% endif %}
+                        {% if sermon.sermon_date %}<p class="text-muted mb-1"><i class="bi bi-calendar3"></i> {{ sermon.sermon_date|date:"d F Y" }}</p>{% endif %}
+                        {% if sermon.description %}<p class="card-text mt-2">{{ sermon.description|truncatewords:25 }}</p>{% endif %}
+                    </div>
+                    {% if sermon.video_url or sermon.audio_url %}
+                    <div class="card-footer bg-white border-0 pb-3">
+                        {% if sermon.video_url %}
+                            <a href="{{ sermon.video_url }}" target="_blank" class="btn btn-church btn-sm me-2">
+                                <i class="bi bi-play-circle"></i> Vidéo
+                            </a>
+                        {% endif %}
+                        {% if sermon.audio_url %}
+                            <a href="{{ sermon.audio_url }}" target="_blank" class="btn btn-outline-secondary btn-sm">
+                                <i class="bi bi-music-note"></i> Audio
+                            </a>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12 text-center py-5">
+                <i class="bi bi-journal-x display-1 text-muted"></i>
+                <p class="text-muted mt-3">Aucune prédication pour le moment.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

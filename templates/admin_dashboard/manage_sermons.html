@@ -1,0 +1,89 @@
+{% extends "admin_dashboard/base_dashboard.html" %}
+{% block title %}Prédications — {{ church.name }}{% endblock %}
+
+{% block dashboard_content %}
+<div class="skeleton-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="skeleton skeleton-title" style="width:200px;"></div>
+        <div class="skeleton skeleton-btn"></div>
+    </div>
+    <div class="card border-0 shadow-sm">
+        <div class="card-body">
+            <table class="table">
+                <thead class="table-light">
+                    <tr>
+                        <th><div class="skeleton skeleton-table-cell" style="width:100px;"></div></th>
+                        <th><div class="skeleton skeleton-table-cell" style="width:80px;"></div></th>
+                        <th><div class="skeleton skeleton-table-cell" style="width:80px;"></div></th>
+                        <th><div class="skeleton skeleton-table-cell" style="width:60px;"></div></th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for i in "123" %}
+                    <tr>
+                        <td><div class="skeleton skeleton-text" style="width:150px;"></div></td>
+                        <td><div class="skeleton skeleton-text" style="width:80px;"></div></td>
+                        <td><div class="skeleton skeleton-text" style="width:80px;"></div></td>
+                        <td><div class="skeleton skeleton-badge"></div></td>
+                        <td class="text-end"><div class="skeleton skeleton-btn" style="width:70px;"></div></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="page-content">
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-book"></i> Prédications</h1>
+    <a href="{% url 'add_sermon' %}" class="btn btn-church">
+        <i class="bi bi-plus-lg"></i> Ajouter une prédication
+    </a>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Titre</th>
+                        <th>Prédicateur</th>
+                        <th>Date</th>
+                        <th>Réf. biblique</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sermon in sermons %}
+                    <tr>
+                        <td>{{ sermon.title }}</td>
+                        <td>{{ sermon.preacher|default:"—" }}</td>
+                        <td>{{ sermon.sermon_date|date:"d/m/Y"|default:"—" }}</td>
+                        <td>{{ sermon.bible_reference|default:"—" }}</td>
+                        <td class="text-end">
+                            <a href="{% url 'edit_sermon' sermon.pk %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <form method="post" action="{% url 'delete_sermon' sermon.pk %}" class="d-inline" data-ajax-delete data-confirm-message="Supprimer cette prédication ?">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">Aucune prédication enregistrée</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+</div>
+{% endblock %}

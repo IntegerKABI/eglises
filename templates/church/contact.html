@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+{% block title %}Contact — {{ church.name }}{% endblock %}
+
+{% block content %}
+<!-- Skeleton -->
+<div class="skeleton-container">
+    <div class="container py-5">
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="skeleton skeleton-title" style="width: 280px;"></div>
+                <div class="skeleton skeleton-text w-100"></div>
+                <div class="skeleton skeleton-text w-100"></div>
+                <div class="skeleton skeleton-text w-75"></div>
+                <div class="skeleton skeleton-text w-100"></div>
+                <div class="skeleton skeleton-text w-50" style="height: 45px;"></div>
+            </div>
+            <div class="col-lg-6 mt-4 mt-lg-0">
+                <div class="card skeleton-card h-100">
+                    <div class="card-body p-4">
+                        <div class="skeleton skeleton-title"></div>
+                        <div class="skeleton skeleton-text w-75"></div>
+                        <div class="skeleton skeleton-text w-50"></div>
+                        <div class="skeleton skeleton-text w-75"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Contenu réel -->
+<div class="page-content">
+    <div class="container py-5">
+        <div class="row">
+            <div class="col-lg-6">
+                <h1 class="text-church mb-4"><i class="bi bi-envelope"></i> Contactez-nous</h1>
+                <form method="post" data-ajax>
+                    {% csrf_token %}
+                    {{ form|crispy }}
+                    <button type="submit" class="btn btn-church btn-lg mt-3">
+                        <i class="bi bi-send"></i> Envoyer
+                    </button>
+                </form>
+            </div>
+            <div class="col-lg-6 mt-4 mt-lg-0">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body p-4">
+                        <h3 class="text-church"><i class="bi bi-info-circle"></i> Nos coordonnées</h3>
+                        <hr>
+                        {% if church.address %}
+                            <p class="fs-5"><i class="bi bi-geo-alt text-church"></i> {{ church.address }}, {{ church.city }}</p>
+                        {% endif %}
+                        {% if church.phone %}
+                            <p class="fs-5"><i class="bi bi-telephone text-church"></i> {{ church.phone }}</p>
+                        {% endif %}
+                        {% if church.email %}
+                            <p class="fs-5"><i class="bi bi-envelope text-church"></i> {{ church.email }}</p>
+                        {% endif %}
+                        {% if church.service_times %}
+                            <hr>
+                            <h5 class="text-church"><i class="bi bi-clock"></i> Horaires</h5>
+                            <p>{{ church.service_times|linebreaksbr }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

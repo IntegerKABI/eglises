@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ page.title }} — {{ church.name }}{% endblock %}
+
+{% block content %}
+<!-- Skeleton -->
+<div class="skeleton-container">
+    <div class="container py-5">
+        <div class="skeleton skeleton-title" style="width: 300px;"></div>
+        <div class="skeleton skeleton-text w-100"></div>
+        <div class="skeleton skeleton-text w-100"></div>
+        <div class="skeleton skeleton-text w-75"></div>
+        <div class="skeleton skeleton-text w-100"></div>
+        <div class="skeleton skeleton-text w-50"></div>
+    </div>
+</div>
+
+<!-- Contenu réel -->
+<div class="page-content">
+    <div class="container py-5">
+        <h1 class="text-church mb-4">{{ page.title }}</h1>
+        <div class="content">
+            {% if page.image %}
+                <img src="{{ page.image.url }}" class="img-fluid rounded float-end ms-4 mb-3" style="max-width: 350px;" alt="{{ page.title }}">
+            {% endif %}
+            {{ page.content|safe }}
+            <div class="clearfix"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}

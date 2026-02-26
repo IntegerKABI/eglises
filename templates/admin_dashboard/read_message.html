@@ -1,0 +1,31 @@
+{% extends "admin_dashboard/base_dashboard.html" %}
+{% block title %}Message — {{ church.name }}{% endblock %}
+
+{% block dashboard_content %}
+<h1 class="mb-4"><i class="bi bi-envelope-open"></i> Message</h1>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-4">
+        <dl class="row mb-0">
+            <dt class="col-sm-3">Expéditeur</dt>
+            <dd class="col-sm-9">{{ msg.sender_name }}</dd>
+
+            <dt class="col-sm-3">Email</dt>
+            <dd class="col-sm-9">{{ msg.sender_email }}</dd>
+
+            <dt class="col-sm-3">Sujet</dt>
+            <dd class="col-sm-9">{{ msg.subject|default:"Sans sujet" }}</dd>
+
+            <dt class="col-sm-3">Date</dt>
+            <dd class="col-sm-9">{{ msg.created_at|date:"d/m/Y H:i" }}</dd>
+
+            <dt class="col-sm-3">Message</dt>
+            <dd class="col-sm-9" style="white-space: pre-wrap;">{{ msg.message }}</dd>
+        </dl>
+    </div>
+</div>
+
+<a href="{% url 'manage_messages' %}" class="btn btn-outline-secondary mt-3">
+    <i class="bi bi-arrow-left"></i> Retour aux messages
+</a>
+{% endblock %}
