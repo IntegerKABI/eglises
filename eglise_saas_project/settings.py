@@ -12,7 +12,10 @@ GUIDE :
 =================================================================
 """
 
+import os
 from pathlib import Path
+
+import dj_database_url
 
 # Chemin racine du projet (c:/xampp/htdocs/eglise_saas)
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,13 +24,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # C'est ici qu'on change le nom affiché partout sur le site
 APP_NAME = 'Église SaaS'
 
-# Clé secrète — en production, mettez-la dans une variable d'environnement
-SECRET_KEY = 'django-insecure-7sjm@9=8mwo^^%1$8ep-q1f3-tfw323d1&x*k&3+7(6r)=8mvl'
+# Clé secrète — lue depuis la variable d'environnement en production
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-7sjm@9=8mwo^^%1$8ep-q1f3-tfw323d1&x*k&3+7(6r)=8mvl')
 
-# Mode debug — à mettre sur False en production
-DEBUG = True
+# Mode debug — False en production
+DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
 # =============================================================
 # APPLICATIONS INSTALLÉES
@@ -60,6 +63,7 @@ INSTALLED_APPS = [
 # Comme un système de sécurité à l'entrée d'un bâtiment.
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',       # Sécurité HTTPS, headers
+    'whitenoise.middleware.WhiteNoiseMiddleware',           # Servir les fichiers statiques en production
     'django.contrib.sessions.middleware.SessionMiddleware', # Gestion des sessions
     'django.middleware.common.CommonMiddleware',            # URL trailing slash, etc.
     'django.middleware.csrf.CsrfViewMiddleware',           # Protection contre les attaques CSRF
@@ -99,10 +103,9 @@ WSGI_APPLICATION = 'eglise_saas_project.wsgi.application'
 # On utilise SQLite pour le développement (pas besoin de MySQL).
 # Le fichier db.sqlite3 sera créé automatiquement.
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}'
+    )
 }
 
 # Validation des mots de passe
@@ -128,6 +131,12 @@ USE_TZ = True                    # Dates avec fuseau horaire
 # STATICFILES_DIRS : dossiers contenant nos fichiers statiques
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 # =============================================================
 # FICHIERS MÉDIA (uploads des utilisateurs : logos, photos, etc.)
