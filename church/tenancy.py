@@ -23,6 +23,7 @@ def get_accessible_churches(user, prefetch_pages=False):
         churches = Church.objects.filter(
             memberships__user=user,
             memberships__is_active=True,
+            status__in=[Church.Status.ACTIVE, Church.Status.DRAFT],
         ).distinct()
     if prefetch_pages:
         churches = churches.prefetch_related(

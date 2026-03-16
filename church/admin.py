@@ -17,10 +17,11 @@ from .models import Church, ChurchMembership, Event, Sermon, Member, Page, Conta
 
 @admin.register(Church)
 class ChurchAdmin(admin.ModelAdmin):
-    list_display = ['name', 'city', 'email', 'is_active', 'created_at']
-    list_filter = ['is_active', 'city', 'country']
+    list_display = ['name', 'city', 'email', 'status', 'created_at']
+    list_filter = ['status', 'city', 'country']
     search_fields = ['name', 'city', 'email']
     prepopulated_fields = {'slug': ('name',)}
+    exclude = ['is_active']
 
 
 @admin.register(Event)

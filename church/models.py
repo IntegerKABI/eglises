@@ -85,6 +85,12 @@ class Church(models.Model):
     Le champ 'slug' sert d'identifiant dans l'URL.
     Exemple : /eglise/vie-nouvelle/ → slug = "vie-nouvelle"
     """
+    class Status(models.TextChoices):
+        DRAFT = 'draft', 'Brouillon'
+        ACTIVE = 'active', 'Active'
+        SUSPENDED = 'suspended', 'Suspendue'
+        ARCHIVED = 'archived', 'Archivée'
+
     name = models.CharField(
         max_length=255,
         verbose_name="Nom de l'église"
@@ -150,6 +156,13 @@ class Church(models.Model):
     )
     pastor_name = models.CharField(max_length=150, blank=True, verbose_name="Nom du pasteur")
 
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.ACTIVE,
+        db_index=True,
+        verbose_name="Statut",
+    )
     is_active = models.BooleanField(default=True, db_index=True, verbose_name="Active")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -174,6 +187,7 @@ class Church(models.Model):
                 self._meta.get_field("slug").max_length,
                 "eglise",
             )
+        self.is_active = self.status == self.Status.ACTIVE
         super().save(*args, **kwargs)
 
 

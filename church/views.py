@@ -99,6 +99,10 @@ def _require_church(request):
         if not membership:
             messages.error(request, "Accès refusé. Aucun rôle défini pour cette église.")
             return None
+        if church.status in {Church.Status.SUSPENDED, Church.Status.ARCHIVED}:
+            messages.error(request, "Cette église est suspendue ou archivée.")
+            request.session.pop('active_church_id', None)
+            return None
     return church
 
 
@@ -109,7 +113,7 @@ def _get_public_church(request, church_slug):
         if church is None:
             raise Http404("Église introuvable.")
         return church
-    return get_object_or_404(Church, slug=church_slug, is_active=True)
+    return get_object_or_404(Church, slug=church_slug, status=Church.Status.ACTIVE)
 
 
 def _handle_church_form(
@@ -183,7 +187,7 @@ def _handle_church_delete(request, model, pk, success_message, success_url_name)
 
 def home(request):
     """Page d'accueil — liste toutes les églises disponibles."""
-    churches = Church.objects.filter(is_active=True)
+    churches = Church.objects.filter(status=Church.Status.ACTIVE)
     q = _get_text_param(request, 'q', 100)
     if q:
         churches = churches.filter(

@@ -29,7 +29,7 @@ class CurrentChurchMiddleware:
 
         if request.current_church_slug:
             request.current_church = (
-                Church.objects.filter(is_active=True, slug=request.current_church_slug)
+                Church.objects.filter(status=Church.Status.ACTIVE, slug=request.current_church_slug)
                 .prefetch_related(
                     Prefetch('pages', queryset=_menu_pages_queryset(), to_attr='menu_pages')
                 )

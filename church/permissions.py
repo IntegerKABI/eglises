@@ -3,7 +3,7 @@ from functools import wraps
 from django.contrib import messages
 from django.shortcuts import redirect
 
-from .models import ChurchMembership
+from .models import Church, ChurchMembership
 from .tenancy import get_membership, get_selected_church
 
 
@@ -20,6 +20,10 @@ def require_church_roles(*roles):
                 request.current_church = church
             if not church:
                 messages.warning(request, "Sélectionnez une église pour continuer.")
+                return redirect('select_church')
+            if church.status in {Church.Status.SUSPENDED, Church.Status.ARCHIVED}:
+                messages.error(request, "Cette église est suspendue ou archivée.")
+                request.session.pop('active_church_id', None)
                 return redirect('select_church')
 
             membership = getattr(request, 'current_membership', None)
