@@ -41,14 +41,14 @@ Une plateforme Django où **n'importe quelle église** peut avoir son propre sit
 
 | Technologie | Version | Rôle |
 |---|---|---|
-| **Python** | 3.13+ | Langage de programmation |
-| **Django** | 6.0 | Framework web (gère les routes, la BDD, l'authentification, l'admin) |
+| **Python** | 3.12.2 | Langage de programmation |
+| **Django** | 6.0.3 | Framework web (gère les routes, la BDD, l'authentification, l'admin) |
 | **SQLite** | intégré | Base de données (fichier `db.sqlite3`, aucune installation requise) |
 | **Bootstrap 5** | 5.3 | Framework CSS pour un design responsive et professionnel |
 | **Bootstrap Icons** | 1.11 | Icônes vectorielles |
-| **Pillow** | 12.x | Bibliothèque Python pour le traitement des images (upload logo/photos) |
-| **django-crispy-forms** | 2.5 | Rendu élégant des formulaires HTML avec Bootstrap |
-| **crispy-bootstrap5** | 2025.x | Template pack Bootstrap 5 pour crispy-forms |
+| **Pillow** | 12.1.1 | Bibliothèque Python pour le traitement des images (upload logo/photos) |
+| **django-crispy-forms** | 2.6 | Rendu élégant des formulaires HTML avec Bootstrap |
+| **crispy-bootstrap5** | 2026.3 | Template pack Bootstrap 5 pour crispy-forms |
 
 ---
 
@@ -117,7 +117,7 @@ eglise_saas/
 
 ### Pré-requis
 
-- **Python 3.10+** installé → vérifier avec `python --version`
+- **Python 3.12.2** installé → vérifier avec `python --version`
 - **pip** installé → vérifier avec `pip --version`
 
 ### Étape 1 — Cloner ou télécharger le projet

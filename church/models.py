@@ -16,7 +16,25 @@ ARCHITECTURE :
 
 from django.db import models
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.utils.html import strip_tags
 from django.utils.text import slugify
+
+
+def _generate_unique_slug(base_value, queryset, max_length, fallback):
+    base_slug = slugify(base_value) or fallback
+    if max_length:
+        base_slug = base_slug[:max_length]
+    slug = base_slug
+    counter = 2
+    while queryset.filter(slug=slug).exists():
+        suffix = f"-{counter}"
+        trimmed = base_slug
+        if max_length and len(base_slug) + len(suffix) > max_length:
+            trimmed = base_slug[: max_length - len(suffix)]
+        slug = f"{trimmed}{suffix}"
+        counter += 1
+    return slug
 
 
 class Church(models.Model):
@@ -101,7 +119,7 @@ class Church(models.Model):
         related_name='churches',
         verbose_name="Administrateur"
     )
-    is_active = models.BooleanField(default=True, verbose_name="Active")
+    is_active = models.BooleanField(default=True, db_index=True, verbose_name="Active")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -116,7 +134,15 @@ class Church(models.Model):
     def save(self, *args, **kwargs):
         """Génère automatiquement le slug à partir du nom."""
         if not self.slug:
-            self.slug = slugify(self.name)
+            queryset = Church.objects.all()
+            if self.pk:
+                queryset = queryset.exclude(pk=self.pk)
+            self.slug = _generate_unique_slug(
+                self.name,
+                queryset,
+                self._meta.get_field("slug").max_length,
+                "eglise",
+            )
         super().save(*args, **kwargs)
 
 
@@ -139,7 +165,7 @@ class Event(models.Model):
         null=True,
         verbose_name="Image"
     )
-    event_date = models.DateField(verbose_name="Date")
+    event_date = models.DateField(verbose_name="Date", db_index=True)
     event_time = models.TimeField(blank=True, null=True, verbose_name="Heure")
     end_date = models.DateField(blank=True, null=True, verbose_name="Date de fin")
     location = models.CharField(max_length=255, blank=True, verbose_name="Lieu")
@@ -151,10 +177,26 @@ class Event(models.Model):
         verbose_name = "Événement"
         verbose_name_plural = "Événements"
         ordering = ['-event_date']  # Les plus récents en premier
+        indexes = [
+            models.Index(fields=['church', 'is_active', 'event_date']),
+            models.Index(fields=['church', 'is_featured']),
+            models.Index(fields=['church', 'event_date']),
+        ]
 
     def __str__(self):
         return f"{self.title} ({self.event_date})"
 
+    def clean(self):
+        super().clean()
+        if self.end_date and self.event_date and self.end_date < self.event_date:
+            raise ValidationError(
+                {
+                    "end_date": (
+                        "La date de fin doit etre posterieure ou egale "
+                        "a la date de l'evenement."
+                    )
+                }
+            )
 
 class Sermon(models.Model):
     """
@@ -177,7 +219,7 @@ class Sermon(models.Model):
     )
     video_url = models.URLField(blank=True, verbose_name="Lien vidéo (YouTube)")
     audio_url = models.URLField(blank=True, verbose_name="Lien audio")
-    sermon_date = models.DateField(blank=True, null=True, verbose_name="Date")
+    sermon_date = models.DateField(blank=True, null=True, verbose_name="Date", db_index=True)
     bible_reference = models.CharField(
         max_length=255,
         blank=True,
@@ -193,6 +235,11 @@ class Sermon(models.Model):
         verbose_name = "Prédication"
         verbose_name_plural = "Prédications"
         ordering = ['-sermon_date']
+        indexes = [
+            models.Index(fields=['church', 'is_active', 'sermon_date']),
+            models.Index(fields=['church', 'is_featured']),
+            models.Index(fields=['church', 'sermon_date']),
+        ]
 
     def __str__(self):
         return self.title
@@ -244,6 +291,11 @@ class Member(models.Model):
         verbose_name = "Membre"
         verbose_name_plural = "Membres"
         ordering = ['last_name', 'first_name']
+        indexes = [
+            models.Index(fields=['church', 'is_active']),
+            models.Index(fields=['church', 'gender']),
+            models.Index(fields=['church', 'last_name', 'first_name']),
+        ]
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
@@ -284,13 +336,27 @@ class Page(models.Model):
         verbose_name_plural = "Pages"
         ordering = ['sort_order']
         unique_together = ['church', 'slug']  # Un slug unique PAR église
+        indexes = [
+            models.Index(fields=['church', 'is_active', 'is_in_menu']),
+            models.Index(fields=['church', 'sort_order']),
+        ]
 
     def __str__(self):
         return self.title
 
     def save(self, *args, **kwargs):
+        if self.content:
+            self.content = strip_tags(self.content)
         if not self.slug:
-            self.slug = slugify(self.title)
+            queryset = Page.objects.filter(church=self.church)
+            if self.pk:
+                queryset = queryset.exclude(pk=self.pk)
+            self.slug = _generate_unique_slug(
+                self.title,
+                queryset,
+                self._meta.get_field("slug").max_length,
+                "page",
+            )
         super().save(*args, **kwargs)
 
 
@@ -315,6 +381,9 @@ class ContactMessage(models.Model):
         verbose_name = "Message de contact"
         verbose_name_plural = "Messages de contact"
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['church', 'is_read', 'created_at']),
+        ]
 
     def __str__(self):
         return f"{self.sender_name} — {self.subject}"

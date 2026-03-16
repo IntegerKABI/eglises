@@ -4,6 +4,15 @@
 {% block dashboard_content %}
 <h1 class="mb-4"><i class="bi bi-envelope-open"></i> Message</h1>
 
+{% if not msg.is_read %}
+<form method="post" class="mb-3">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-church">
+        <i class="bi bi-check-lg"></i> Marquer comme lu
+    </button>
+</form>
+{% endif %}
+
 <div class="card border-0 shadow-sm">
     <div class="card-body p-4">
         <dl class="row mb-0">

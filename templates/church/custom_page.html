@@ -22,7 +22,7 @@
             {% if page.image %}
                 <img src="{{ page.image.url }}" class="img-fluid rounded float-end ms-4 mb-3" style="max-width: 350px;" alt="{{ page.title }}">
             {% endif %}
-            {{ page.content|safe }}
+            {{ page.content|linebreaksbr }}
             <div class="clearfix"></div>
         </div>
     </div>

@@ -21,16 +21,55 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
+from django.core.paginator import Paginator
+from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 
 from .models import Church, Event, Sermon, Member, Page, ContactMessage, SiteSettings
 from .forms import ChurchForm, EventForm, SermonForm, MemberForm, PageForm, ContactForm, SiteSettingsForm
+from .tenancy import get_accessible_churches, get_selected_church
 
 
 def is_ajax(request):
     """Vérifie si la requête est AJAX."""
     return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+
+def _querystring_without_page(request):
+    params = request.GET.copy()
+    params.pop('page', None)
+    return params.urlencode()
+
+
+def _parse_bool_param(value):
+    if value in ('1', 'true', 'yes', 'on'):
+        return True
+    if value in ('0', 'false', 'no', 'off'):
+        return False
+    return None
+
+
+def _get_text_param(request, key, max_len=200):
+    value = request.GET.get(key, '')
+    if value is None:
+        return ''
+    value = value.strip()
+    if len(value) > max_len:
+        value = value[:max_len]
+    return value
+
+
+def _get_choice_param(request, key, allowed):
+    value = request.GET.get(key)
+    return value if value in allowed else ''
+
+
+def _require_church(request):
+    church = get_selected_church(request)
+    if not church:
+        messages.warning(request, "Sélectionnez une église pour continuer.")
+    return church
 
 
 # =============================================================
@@ -40,7 +79,20 @@ def is_ajax(request):
 def home(request):
     """Page d'accueil — liste toutes les églises disponibles."""
     churches = Church.objects.filter(is_active=True)
-    return render(request, 'church/home.html', {'churches': churches})
+    q = _get_text_param(request, 'q', 100)
+    if q:
+        churches = churches.filter(
+            Q(name__icontains=q) |
+            Q(city__icontains=q) |
+            Q(country__icontains=q)
+        )
+    paginator = Paginator(churches, 9)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, 'church/home.html', {
+        'churches': page_obj,
+        'page_obj': page_obj,
+        'querystring': _querystring_without_page(request),
+    })
 
 
 def church_home(request, church_slug):
@@ -68,9 +120,31 @@ def church_events(request, church_slug):
     """Liste de tous les événements d'une église."""
     church = get_object_or_404(Church, slug=church_slug, is_active=True)
     events = church.events.filter(is_active=True)
+    q = _get_text_param(request, 'q', 100)
+    if q:
+        events = events.filter(
+            Q(title__icontains=q) |
+            Q(description__icontains=q) |
+            Q(location__icontains=q)
+        )
+    featured = _parse_bool_param(request.GET.get('featured'))
+    if featured is True:
+        events = events.filter(is_featured=True)
+    elif featured is False:
+        events = events.filter(is_featured=False)
+    when = _get_choice_param(request, 'when', {'upcoming', 'past'})
+    today = timezone.now().date()
+    if when == 'upcoming':
+        events = events.filter(event_date__gte=today)
+    elif when == 'past':
+        events = events.filter(event_date__lt=today)
+    paginator = Paginator(events, 9)
+    page_obj = paginator.get_page(request.GET.get('page'))
     return render(request, 'church/events.html', {
         'church': church,
-        'events': events,
+        'events': page_obj,
+        'page_obj': page_obj,
+        'querystring': _querystring_without_page(request),
     })
 
 
@@ -78,9 +152,26 @@ def church_sermons(request, church_slug):
     """Liste de toutes les prédications d'une église."""
     church = get_object_or_404(Church, slug=church_slug, is_active=True)
     sermons = church.sermons.filter(is_active=True)
+    q = _get_text_param(request, 'q', 100)
+    if q:
+        sermons = sermons.filter(
+            Q(title__icontains=q) |
+            Q(description__icontains=q) |
+            Q(preacher__icontains=q) |
+            Q(bible_reference__icontains=q)
+        )
+    featured = _parse_bool_param(request.GET.get('featured'))
+    if featured is True:
+        sermons = sermons.filter(is_featured=True)
+    elif featured is False:
+        sermons = sermons.filter(is_featured=False)
+    paginator = Paginator(sermons, 9)
+    page_obj = paginator.get_page(request.GET.get('page'))
     return render(request, 'church/sermons.html', {
         'church': church,
-        'sermons': sermons,
+        'sermons': page_obj,
+        'page_obj': page_obj,
+        'querystring': _querystring_without_page(request),
     })
 
 
@@ -119,6 +210,32 @@ def church_contact(request, church_slug):
     })
 
 
+@login_required
+def select_church(request):
+    churches = get_accessible_churches(request.user)
+    if not churches.exists():
+        messages.warning(request, "Aucune église associée à votre compte.")
+        return redirect('home')
+
+    if churches.count() == 1:
+        church = churches.first()
+        request.session['active_church_id'] = church.id
+        return redirect('dashboard')
+
+    if request.method == 'POST':
+        church_id = request.POST.get('church_id')
+        church = churches.filter(id=church_id).first()
+        if not church:
+            messages.error(request, "Sélection d'église invalide.")
+        else:
+            request.session['active_church_id'] = church.id
+            return redirect('dashboard')
+
+    return render(request, 'admin_dashboard/select_church.html', {
+        'churches': churches,
+    })
+
+
 # =============================================================
 #  VUES DASHBOARD — Interface d'administration (pasteur/admin)
 # =============================================================
@@ -129,10 +246,9 @@ def dashboard(request):
     Tableau de bord principal.
     Affiche les statistiques de l'église de l'utilisateur connecté.
     """
-    church = request.user.churches.first()
+    church = _require_church(request)
     if not church:
-        messages.warning(request, "Vous n'avez pas encore d'église associée.")
-        return redirect('home')
+        return redirect('select_church')
 
     context = {
         'church': church,
@@ -152,9 +268,9 @@ def dashboard(request):
 @login_required
 def church_settings(request):
     """Paramètres de l'église (nom, logo, couleurs, etc.)."""
-    church = request.user.churches.first()
+    church = _require_church(request)
     if not church:
-        return redirect('home')
+        return redirect('select_church')
 
     if request.method == 'POST':
         form = ChurchForm(request.POST, request.FILES, instance=church)
@@ -180,22 +296,49 @@ def church_settings(request):
 @login_required
 def manage_events(request):
     """Liste des événements (dashboard)."""
-    church = request.user.churches.first()
+    church = _require_church(request)
     if not church:
-        return redirect('home')
+        return redirect('select_church')
     events = church.events.all()
+    q = _get_text_param(request, 'q', 100)
+    if q:
+        events = events.filter(
+            Q(title__icontains=q) |
+            Q(description__icontains=q) |
+            Q(location__icontains=q)
+        )
+    status = _get_choice_param(request, 'status', {'active', 'inactive'})
+    if status == 'active':
+        events = events.filter(is_active=True)
+    elif status == 'inactive':
+        events = events.filter(is_active=False)
+    featured = _parse_bool_param(request.GET.get('featured'))
+    if featured is True:
+        events = events.filter(is_featured=True)
+    elif featured is False:
+        events = events.filter(is_featured=False)
+    when = _get_choice_param(request, 'when', {'upcoming', 'past'})
+    today = timezone.now().date()
+    if when == 'upcoming':
+        events = events.filter(event_date__gte=today)
+    elif when == 'past':
+        events = events.filter(event_date__lt=today)
+    paginator = Paginator(events, 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
     return render(request, 'admin_dashboard/manage_events.html', {
         'church': church,
-        'events': events,
+        'events': page_obj,
+        'page_obj': page_obj,
+        'querystring': _querystring_without_page(request),
     })
 
 
 @login_required
 def add_event(request):
     """Ajouter un événement."""
-    church = request.user.churches.first()
+    church = _require_church(request)
     if not church:
-        return redirect('home')
+        return redirect('select_church')
 
     if request.method == 'POST':
         form = EventForm(request.POST, request.FILES)
@@ -222,7 +365,9 @@ def add_event(request):
 @login_required
 def edit_event(request, pk):
     """Modifier un événement."""
-    church = request.user.churches.first()
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
     event = get_object_or_404(Event, pk=pk, church=church)
 
     if request.method == 'POST':
@@ -248,7 +393,9 @@ def edit_event(request, pk):
 @login_required
 def delete_event(request, pk):
     """Supprimer un événement."""
-    church = request.user.churches.first()
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
     event = get_object_or_404(Event, pk=pk, church=church)
     if request.method == 'POST':
         event.delete()
@@ -262,21 +409,43 @@ def delete_event(request, pk):
 
 @login_required
 def manage_sermons(request):
-    church = request.user.churches.first()
+    church = _require_church(request)
     if not church:
-        return redirect('home')
+        return redirect('select_church')
     sermons = church.sermons.all()
+    q = _get_text_param(request, 'q', 100)
+    if q:
+        sermons = sermons.filter(
+            Q(title__icontains=q) |
+            Q(description__icontains=q) |
+            Q(preacher__icontains=q) |
+            Q(bible_reference__icontains=q)
+        )
+    status = _get_choice_param(request, 'status', {'active', 'inactive'})
+    if status == 'active':
+        sermons = sermons.filter(is_active=True)
+    elif status == 'inactive':
+        sermons = sermons.filter(is_active=False)
+    featured = _parse_bool_param(request.GET.get('featured'))
+    if featured is True:
+        sermons = sermons.filter(is_featured=True)
+    elif featured is False:
+        sermons = sermons.filter(is_featured=False)
+    paginator = Paginator(sermons, 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
     return render(request, 'admin_dashboard/manage_sermons.html', {
         'church': church,
-        'sermons': sermons,
+        'sermons': page_obj,
+        'page_obj': page_obj,
+        'querystring': _querystring_without_page(request),
     })
 
 
 @login_required
 def add_sermon(request):
-    church = request.user.churches.first()
+    church = _require_church(request)
     if not church:
-        return redirect('home')
+        return redirect('select_church')
 
     if request.method == 'POST':
         form = SermonForm(request.POST, request.FILES)
@@ -302,7 +471,9 @@ def add_sermon(request):
 
 @login_required
 def edit_sermon(request, pk):
-    church = request.user.churches.first()
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
     sermon = get_object_or_404(Sermon, pk=pk, church=church)
 
     if request.method == 'POST':
@@ -327,7 +498,9 @@ def edit_sermon(request, pk):
 
 @login_required
 def delete_sermon(request, pk):
-    church = request.user.churches.first()
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
     sermon = get_object_or_404(Sermon, pk=pk, church=church)
     if request.method == 'POST':
         sermon.delete()
@@ -341,21 +514,44 @@ def delete_sermon(request, pk):
 
 @login_required
 def manage_members(request):
-    church = request.user.churches.first()
+    church = _require_church(request)
     if not church:
-        return redirect('home')
+        return redirect('select_church')
     members = church.members.all()
+    q = _get_text_param(request, 'q', 100)
+    if q:
+        members = members.filter(
+            Q(first_name__icontains=q) |
+            Q(last_name__icontains=q) |
+            Q(email__icontains=q) |
+            Q(phone__icontains=q)
+        )
+    status = _get_choice_param(request, 'status', {'active', 'inactive'})
+    if status == 'active':
+        members = members.filter(is_active=True)
+    elif status == 'inactive':
+        members = members.filter(is_active=False)
+    gender = _get_choice_param(request, 'gender', {'M', 'F'})
+    if gender in ('M', 'F'):
+        members = members.filter(gender=gender)
+    department = _get_text_param(request, 'department', 100)
+    if department:
+        members = members.filter(department__icontains=department)
+    paginator = Paginator(members, 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
     return render(request, 'admin_dashboard/manage_members.html', {
         'church': church,
-        'members': members,
+        'members': page_obj,
+        'page_obj': page_obj,
+        'querystring': _querystring_without_page(request),
     })
 
 
 @login_required
 def add_member(request):
-    church = request.user.churches.first()
+    church = _require_church(request)
     if not church:
-        return redirect('home')
+        return redirect('select_church')
 
     if request.method == 'POST':
         form = MemberForm(request.POST, request.FILES)
@@ -381,7 +577,9 @@ def add_member(request):
 
 @login_required
 def edit_member(request, pk):
-    church = request.user.churches.first()
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
     member = get_object_or_404(Member, pk=pk, church=church)
 
     if request.method == 'POST':
@@ -406,7 +604,9 @@ def edit_member(request, pk):
 
 @login_required
 def delete_member(request, pk):
-    church = request.user.churches.first()
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
     member = get_object_or_404(Member, pk=pk, church=church)
     if request.method == 'POST':
         member.delete()
@@ -416,26 +616,155 @@ def delete_member(request, pk):
     return redirect('manage_members')
 
 
+# --- CRUD Pages ---
+
+@login_required
+def manage_pages(request):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+    pages = church.pages.all()
+    q = _get_text_param(request, 'q', 100)
+    if q:
+        pages = pages.filter(
+            Q(title__icontains=q) |
+            Q(slug__icontains=q)
+        )
+    status = _get_choice_param(request, 'status', {'active', 'inactive'})
+    if status == 'active':
+        pages = pages.filter(is_active=True)
+    elif status == 'inactive':
+        pages = pages.filter(is_active=False)
+    in_menu = _parse_bool_param(request.GET.get('in_menu'))
+    if in_menu is True:
+        pages = pages.filter(is_in_menu=True)
+    elif in_menu is False:
+        pages = pages.filter(is_in_menu=False)
+    paginator = Paginator(pages, 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, 'admin_dashboard/manage_pages.html', {
+        'church': church,
+        'pages': page_obj,
+        'page_obj': page_obj,
+        'querystring': _querystring_without_page(request),
+    })
+
+
+@login_required
+def add_page(request):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+
+    if request.method == 'POST':
+        form = PageForm(request.POST, request.FILES)
+        if form.is_valid():
+            page = form.save(commit=False)
+            page.church = church
+            page.save()
+            if is_ajax(request):
+                return JsonResponse({'success': True, 'message': 'Page ajoutÃ©e !', 'redirect': reverse('manage_pages')})
+            messages.success(request, 'Page ajoutÃ©e !')
+            return redirect('manage_pages')
+        elif is_ajax(request):
+            return JsonResponse({'success': False, 'errors': form.errors})
+    else:
+        form = PageForm()
+
+    return render(request, 'admin_dashboard/page_form.html', {
+        'church': church,
+        'form': form,
+        'title': 'Ajouter une page',
+    })
+
+
+@login_required
+def edit_page(request, pk):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+    page = get_object_or_404(Page, pk=pk, church=church)
+
+    if request.method == 'POST':
+        form = PageForm(request.POST, request.FILES, instance=page)
+        if form.is_valid():
+            form.save()
+            if is_ajax(request):
+                return JsonResponse({'success': True, 'message': 'Page modifiÃ©e !', 'redirect': reverse('manage_pages')})
+            messages.success(request, 'Page modifiÃ©e !')
+            return redirect('manage_pages')
+        elif is_ajax(request):
+            return JsonResponse({'success': False, 'errors': form.errors})
+    else:
+        form = PageForm(instance=page)
+
+    return render(request, 'admin_dashboard/page_form.html', {
+        'church': church,
+        'form': form,
+        'title': 'Modifier la page',
+        'page': page,
+    })
+
+
+@login_required
+def delete_page(request, pk):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+    page = get_object_or_404(Page, pk=pk, church=church)
+    if request.method == 'POST':
+        page.delete()
+        if is_ajax(request):
+            return JsonResponse({'success': True, 'message': 'Page supprimÃ©e !'})
+        messages.success(request, 'Page supprimÃ©e !')
+    return redirect('manage_pages')
+
+
 # --- Messages de contact ---
 
 @login_required
 def manage_messages(request):
-    church = request.user.churches.first()
+    church = _require_church(request)
     if not church:
-        return redirect('home')
+        return redirect('select_church')
     contact_messages = church.messages.all()
+    q = _get_text_param(request, 'q', 200)
+    if q:
+        contact_messages = contact_messages.filter(
+            Q(sender_name__icontains=q) |
+            Q(sender_email__icontains=q) |
+            Q(subject__icontains=q) |
+            Q(message__icontains=q)
+        )
+    read = _get_choice_param(request, 'read', {'read', 'unread'})
+    if read == 'read':
+        contact_messages = contact_messages.filter(is_read=True)
+    elif read == 'unread':
+        contact_messages = contact_messages.filter(is_read=False)
+    paginator = Paginator(contact_messages, 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
     return render(request, 'admin_dashboard/manage_messages.html', {
         'church': church,
-        'contact_messages': contact_messages,
+        'contact_messages': page_obj,
+        'page_obj': page_obj,
+        'querystring': _querystring_without_page(request),
     })
 
 
 @login_required
 def read_message(request, pk):
-    church = request.user.churches.first()
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
     msg = get_object_or_404(ContactMessage, pk=pk, church=church)
-    msg.is_read = True
-    msg.save()
+    if request.method == 'POST':
+        if not msg.is_read:
+            msg.is_read = True
+            msg.save(update_fields=['is_read'])
+        if is_ajax(request):
+            return JsonResponse({'success': True, 'message': 'Message marquÃ© comme lu.'})
+        messages.success(request, 'Message marquÃ© comme lu.')
+        return redirect('read_message', pk=pk)
     return render(request, 'admin_dashboard/read_message.html', {
         'church': church,
         'msg': msg,
@@ -452,7 +781,7 @@ def site_settings(request):
         return redirect('dashboard')
 
     settings_obj = SiteSettings.get()
-    church = request.user.churches.first()
+    church = get_selected_church(request)
 
     if request.method == 'POST':
         form = SiteSettingsForm(request.POST, request.FILES, instance=settings_obj)

@@ -29,6 +29,7 @@ urlpatterns = [
 
     # === DASHBOARD (administration) ===
     path('dashboard/', views.dashboard, name='dashboard'),
+    path('dashboard/selection/', views.select_church, name='select_church'),
     path('dashboard/parametres/', views.church_settings, name='church_settings'),
 
     # Événements
@@ -48,6 +49,12 @@ urlpatterns = [
     path('dashboard/membres/ajouter/', views.add_member, name='add_member'),
     path('dashboard/membres/<int:pk>/modifier/', views.edit_member, name='edit_member'),
     path('dashboard/membres/<int:pk>/supprimer/', views.delete_member, name='delete_member'),
+
+    # Pages
+    path('dashboard/pages/', views.manage_pages, name='manage_pages'),
+    path('dashboard/pages/ajouter/', views.add_page, name='add_page'),
+    path('dashboard/pages/<int:pk>/modifier/', views.edit_page, name='edit_page'),
+    path('dashboard/pages/<int:pk>/supprimer/', views.delete_page, name='delete_page'),
 
     # Messages
     path('dashboard/messages/', views.manage_messages, name='manage_messages'),

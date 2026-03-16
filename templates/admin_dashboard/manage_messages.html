@@ -38,6 +38,25 @@
 <div class="page-content">
 <h1 class="mb-4"><i class="bi bi-envelope"></i> Messages</h1>
 
+<form method="get" class="row g-2 align-items-end mb-4">
+    <div class="col-md-6">
+        <label class="form-label">Recherche</label>
+        <input type="text" name="q" value="{{ request.GET.q }}" class="form-control" placeholder="Nom, email, sujet, message">
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Statut</label>
+        <select name="read" class="form-select">
+            <option value="" {% if not request.GET.read %}selected{% endif %}>Tous</option>
+            <option value="unread" {% if request.GET.read == 'unread' %}selected{% endif %}>Non lus</option>
+            <option value="read" {% if request.GET.read == 'read' %}selected{% endif %}>Lus</option>
+        </select>
+    </div>
+    <div class="col-md-3 d-flex gap-2">
+        <button type="submit" class="btn btn-church w-100">Filtrer</button>
+        <a href="{% url 'manage_messages' %}" class="btn btn-outline-secondary w-100">Réinitialiser</a>
+    </div>
+</form>
+
 <div class="card border-0 shadow-sm">
     <div class="card-body">
         <div class="table-responsive">
@@ -52,7 +71,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for msg in messages %}
+                    {% for msg in contact_messages %}
                     <tr class="{% if not msg.is_read %}fw-bold{% endif %}">
                         <td>{{ msg.sender_name }}</td>
                         <td>{{ msg.subject|default:"Sans sujet" }}</td>
@@ -80,5 +99,7 @@
         </div>
     </div>
 </div>
+
+{% include "partials/pagination.html" %}
 </div>
 {% endblock %}

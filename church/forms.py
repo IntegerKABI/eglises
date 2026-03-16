@@ -47,6 +47,17 @@ class EventForm(forms.ModelForm):
             'end_date': forms.DateInput(attrs={'type': 'date'}),
         }
 
+    def clean(self):
+        cleaned_data = super().clean()
+        event_date = cleaned_data.get("event_date")
+        end_date = cleaned_data.get("end_date")
+        if event_date and end_date and end_date < event_date:
+            self.add_error(
+                "end_date",
+                "La date de fin doit etre posterieure ou egale a la date de l'evenement.",
+            )
+        return cleaned_data
+
 
 class SermonForm(forms.ModelForm):
     """Formulaire de création/modification d'une prédication."""

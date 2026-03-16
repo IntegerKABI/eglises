@@ -43,6 +43,33 @@
     </a>
 </div>
 
+<form method="get" class="row g-2 align-items-end mb-4">
+    <div class="col-md-5">
+        <label class="form-label">Recherche</label>
+        <input type="text" name="q" value="{{ request.GET.q }}" class="form-control" placeholder="Titre, prédicateur, référence, description">
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Statut</label>
+        <select name="status" class="form-select">
+            <option value="" {% if not request.GET.status %}selected{% endif %}>Tous</option>
+            <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Actif</option>
+            <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inactif</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Mis en avant</label>
+        <select name="featured" class="form-select">
+            <option value="" {% if not request.GET.featured %}selected{% endif %}>Tous</option>
+            <option value="1" {% if request.GET.featured == '1' %}selected{% endif %}>Oui</option>
+            <option value="0" {% if request.GET.featured == '0' %}selected{% endif %}>Non</option>
+        </select>
+    </div>
+    <div class="col-md-3 d-flex gap-2">
+        <button type="submit" class="btn btn-church w-100">Filtrer</button>
+        <a href="{% url 'manage_sermons' %}" class="btn btn-outline-secondary w-100">Réinitialiser</a>
+    </div>
+</form>
+
 <div class="card border-0 shadow-sm">
     <div class="card-body">
         <div class="table-responsive">
@@ -85,5 +112,7 @@
         </div>
     </div>
 </div>
+
+{% include "partials/pagination.html" %}
 </div>
 {% endblock %}

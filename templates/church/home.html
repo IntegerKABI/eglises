@@ -73,6 +73,16 @@
     <!-- Liste des églises -->
     <div class="container py-5">
         <h2 class="text-center mb-4">Nos Églises</h2>
+        <form method="get" class="row g-2 align-items-end mb-4">
+            <div class="col-md-8">
+                <label class="form-label">Recherche</label>
+                <input type="text" name="q" value="{{ request.GET.q }}" class="form-control" placeholder="Nom, ville, pays">
+            </div>
+            <div class="col-md-4 d-flex gap-2">
+                <button type="submit" class="btn btn-church w-100">Filtrer</button>
+                <a href="{% url 'home' %}" class="btn btn-outline-secondary w-100">Réinitialiser</a>
+            </div>
+        </form>
         <div class="row g-4">
             {% for church in churches %}
             <div class="col-md-6 col-lg-4">
@@ -112,6 +122,8 @@
             </div>
             {% endfor %}
         </div>
+
+        {% include "partials/pagination.html" %}
     </div>
 </div>
 {% endblock %}

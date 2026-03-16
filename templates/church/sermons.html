@@ -46,6 +46,25 @@
     <div class="container py-5">
         <h1 class="text-church mb-4"><i class="bi bi-book"></i> Prédications</h1>
 
+        <form method="get" class="row g-2 align-items-end mb-4">
+            <div class="col-md-7">
+                <label class="form-label">Recherche</label>
+                <input type="text" name="q" value="{{ request.GET.q }}" class="form-control" placeholder="Titre, prédicateur, référence, description">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Mis en avant</label>
+                <select name="featured" class="form-select">
+                    <option value="" {% if not request.GET.featured %}selected{% endif %}>Tous</option>
+                    <option value="1" {% if request.GET.featured == '1' %}selected{% endif %}>Oui</option>
+                    <option value="0" {% if request.GET.featured == '0' %}selected{% endif %}>Non</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-church w-100">Filtrer</button>
+                <a href="{% url 'church_sermons' church.slug %}" class="btn btn-outline-secondary w-100">Réinitialiser</a>
+            </div>
+        </form>
+
         <div class="row g-4">
             {% for sermon in sermons %}
             <div class="col-md-6 col-lg-4">
@@ -87,6 +106,8 @@
             </div>
             {% endfor %}
         </div>
+
+        {% include "partials/pagination.html" %}
     </div>
 </div>
 {% endblock %}

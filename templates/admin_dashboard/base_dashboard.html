@@ -37,6 +37,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="{% url 'manage_pages' %}">
+                            <i class="bi bi-file-earmark-text"></i> Pages
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="{% url 'manage_messages' %}">
                             <i class="bi bi-envelope"></i> Messages
                             {% if unread_messages_count %}
@@ -61,7 +66,7 @@
                 <hr>
                 <ul class="nav flex-column">
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'church_home' church.slug %}" target="_blank">
+                        <a class="nav-link" href="{% if church %}{% url 'church_home' church.slug %}{% else %}{% url 'select_church' %}{% endif %}" target="_blank">
                             <i class="bi bi-eye"></i> Voir le site
                         </a>
                     </li>
