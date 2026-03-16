@@ -13,7 +13,7 @@ Cette commande crée :
 
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
-from church.models import Church, Event, Sermon, Member, Page
+from church.models import Church, ChurchMembership, Event, Sermon, Member, Page
 from datetime import date, timedelta
 
 
@@ -52,13 +52,18 @@ class Command(BaseCommand):
                 'welcome_message': 'Bienvenue dans la maison du Seigneur ! Nous sommes une famille unie par la foi et l\'amour de Dieu.',
                 'service_times': 'Dimanche : 09h00 - 12h00\nMercredi : 18h00 - 20h00\nVendredi : 18h00 - 20h00 (Veillée de prière)',
                 'pastor_name': 'Pasteur Jean-Baptiste Mukendi',
-                'admin': user,
             }
         )
         if created:
             self.stdout.write(self.style.SUCCESS(f'[OK] Eglise creee : {church.name}'))
         else:
             self.stdout.write(f'[INFO] Eglise "{church.name}" existe deja')
+
+        ChurchMembership.objects.get_or_create(
+            user=user,
+            church=church,
+            defaults={'role': ChurchMembership.Role.ADMIN, 'is_active': True},
+        )
 
         # 3. Créer des événements
         today = date.today()

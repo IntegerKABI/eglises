@@ -1,6 +1,6 @@
 from django.db.models import Prefetch
 
-from .models import Church, Page
+from .models import Church, ChurchMembership, Page
 
 
 def _menu_pages_queryset():
@@ -20,7 +20,10 @@ def get_accessible_churches(user, prefetch_pages=False):
     if user.is_superuser:
         churches = Church.objects.all()
     else:
-        churches = Church.objects.filter(admin=user)
+        churches = Church.objects.filter(
+            memberships__user=user,
+            memberships__is_active=True,
+        ).distinct()
     if prefetch_pages:
         churches = churches.prefetch_related(
             Prefetch('pages', queryset=_menu_pages_queryset(), to_attr='menu_pages')
@@ -38,6 +41,7 @@ def get_selected_church(request, prefetch_pages=False):
         church = churches.filter(id=church_id).first()
         if church:
             return church
+        request.session.pop('active_church_id', None)
 
     if churches.count() == 1:
         church = churches.first()
@@ -45,3 +49,15 @@ def get_selected_church(request, prefetch_pages=False):
         return church
 
     return None
+
+
+def get_membership(user, church):
+    if not user.is_authenticated or not church:
+        return None
+    if user.is_superuser:
+        return None
+    return ChurchMembership.objects.filter(
+        user=user,
+        church=church,
+        is_active=True,
+    ).first()

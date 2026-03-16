@@ -60,6 +60,12 @@ urlpatterns = [
     path('dashboard/messages/', views.manage_messages, name='manage_messages'),
     path('dashboard/messages/<int:pk>/', views.read_message, name='read_message'),
 
+    # Utilisateurs
+    path('dashboard/utilisateurs/', views.manage_users, name='manage_users'),
+    path('dashboard/utilisateurs/ajouter/', views.add_user, name='add_user'),
+    path('dashboard/utilisateurs/assigner/', views.assign_user, name='assign_user'),
+    path('dashboard/utilisateurs/<int:pk>/modifier/', views.edit_membership, name='edit_membership'),
+
     # Paramètres globaux (super-admin)
     path('dashboard/site/', views.site_settings, name='site_settings'),
 ]

@@ -12,7 +12,7 @@ pratique (filtres, recherche, colonnes affichées, etc.)
 """
 
 from django.contrib import admin
-from .models import Church, Event, Sermon, Member, Page, ContactMessage, SiteSettings
+from .models import Church, ChurchMembership, Event, Sermon, Member, Page, ContactMessage, SiteSettings
 
 
 @admin.register(Church)
@@ -56,6 +56,13 @@ class ContactMessageAdmin(admin.ModelAdmin):
     list_display = ['sender_name', 'sender_email', 'subject', 'church', 'is_read', 'created_at']
     list_filter = ['church', 'is_read']
     search_fields = ['sender_name', 'sender_email', 'subject', 'message']
+
+
+@admin.register(ChurchMembership)
+class ChurchMembershipAdmin(admin.ModelAdmin):
+    list_display = ['user', 'church', 'role', 'is_active', 'created_at']
+    list_filter = ['church', 'role', 'is_active']
+    search_fields = ['user__username', 'user__email', 'user__first_name', 'user__last_name']
 
 
 @admin.register(SiteSettings)

@@ -1,7 +1,7 @@
 from django.db.models import Prefetch
 
 from .models import Church, Page
-from .tenancy import get_selected_church
+from .tenancy import get_selected_church, get_membership
 
 
 def _menu_pages_queryset():
@@ -24,6 +24,7 @@ class CurrentChurchMiddleware:
 
     def process_view(self, request, view_func, view_args, view_kwargs):
         request.current_church = None
+        request.current_membership = None
         request.current_church_slug = view_kwargs.get('church_slug')
 
         if request.current_church_slug:
@@ -34,8 +35,12 @@ class CurrentChurchMiddleware:
                 )
                 .first()
             )
+            if request.user.is_authenticated and request.current_church:
+                request.current_membership = get_membership(request.user, request.current_church)
             return None
 
         if request.user.is_authenticated:
             request.current_church = get_selected_church(request, prefetch_pages=True)
+            if request.current_church:
+                request.current_membership = get_membership(request.user, request.current_church)
         return None

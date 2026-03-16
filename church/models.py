@@ -150,15 +150,6 @@ class Church(models.Model):
     )
     pastor_name = models.CharField(max_length=150, blank=True, verbose_name="Nom du pasteur")
 
-    # Administration
-    admin = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='churches',
-        verbose_name="Administrateur"
-    )
     is_active = models.BooleanField(default=True, db_index=True, verbose_name="Active")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -184,6 +175,47 @@ class Church(models.Model):
                 "eglise",
             )
         super().save(*args, **kwargs)
+
+
+class ChurchMembership(models.Model):
+    class Role(models.TextChoices):
+        ADMIN = 'admin', "Administrateur"
+        STAFF = 'staff', "Staff"
+        SECRETARY = 'secretary', "Secrétaire"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='church_memberships',
+        verbose_name="Utilisateur",
+    )
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name='memberships',
+        verbose_name="Église",
+    )
+    role = models.CharField(
+        max_length=20,
+        choices=Role.choices,
+        default=Role.STAFF,
+        verbose_name="Rôle",
+    )
+    is_active = models.BooleanField(default=True, verbose_name="Actif")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Membre d'église"
+        verbose_name_plural = "Membres d'église"
+        unique_together = ['user', 'church']
+        indexes = [
+            models.Index(fields=['church', 'role', 'is_active'], name='chm_ch_role_active_idx'),
+            models.Index(fields=['user', 'is_active'], name='chm_user_active_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.user} — {self.church} ({self.get_role_display()})"
 
 
 class Event(models.Model):

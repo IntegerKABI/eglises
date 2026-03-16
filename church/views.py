@@ -26,9 +26,27 @@ from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Church, Event, Sermon, Member, Page, ContactMessage, SiteSettings
-from .forms import ChurchForm, EventForm, SermonForm, MemberForm, PageForm, ContactForm, SiteSettingsForm
-from .tenancy import get_accessible_churches, get_selected_church
+from .models import Church, ChurchMembership, Event, Sermon, Member, Page, ContactMessage, SiteSettings
+from .forms import (
+    ChurchForm,
+    EventForm,
+    SermonForm,
+    MemberForm,
+    PageForm,
+    ContactForm,
+    ChurchUserCreateForm,
+    ChurchMembershipAssignForm,
+    ChurchMembershipUpdateForm,
+    SiteSettingsForm,
+)
+from .permissions import (
+    ADMIN_ONLY,
+    MEMBER_ROLES,
+    SECRETARY_ROLES,
+    STAFF_ROLES,
+    require_church_roles,
+)
+from .tenancy import get_accessible_churches, get_membership, get_selected_church
 
 
 def is_ajax(request):
@@ -72,6 +90,15 @@ def _require_church(request):
         request.current_church = church
     if not church:
         messages.warning(request, "Sélectionnez une église pour continuer.")
+        return None
+    if request.user.is_authenticated and not request.user.is_superuser:
+        membership = getattr(request, 'current_membership', None)
+        if membership is None:
+            membership = get_membership(request.user, church)
+            request.current_membership = membership
+        if not membership:
+            messages.error(request, "Accès refusé. Aucun rôle défini pour cette église.")
+            return None
     return church
 
 
@@ -319,6 +346,7 @@ def select_church(request):
 # =============================================================
 
 @login_required
+@require_church_roles(*MEMBER_ROLES)
 def dashboard(request):
     """
     Tableau de bord principal.
@@ -344,6 +372,7 @@ def dashboard(request):
 
 
 @login_required
+@require_church_roles(*ADMIN_ONLY)
 def church_settings(request):
     """Paramètres de l'église (nom, logo, couleurs, etc.)."""
     church = _require_church(request)
@@ -372,6 +401,7 @@ def church_settings(request):
 # --- CRUD Événements ---
 
 @login_required
+@require_church_roles(*STAFF_ROLES)
 def manage_events(request):
     """Liste des événements (dashboard)."""
     church = _require_church(request)
@@ -412,6 +442,7 @@ def manage_events(request):
 
 
 @login_required
+@require_church_roles(*STAFF_ROLES)
 def add_event(request):
     """Ajouter un événement."""
     return _handle_church_form(
@@ -425,6 +456,7 @@ def add_event(request):
 
 
 @login_required
+@require_church_roles(*STAFF_ROLES)
 def edit_event(request, pk):
     """Modifier un événement."""
     return _handle_church_form(
@@ -441,6 +473,7 @@ def edit_event(request, pk):
 
 
 @login_required
+@require_church_roles(*STAFF_ROLES)
 def delete_event(request, pk):
     """Supprimer un événement."""
     return _handle_church_delete(
@@ -455,6 +488,7 @@ def delete_event(request, pk):
 # --- CRUD Prédications ---
 
 @login_required
+@require_church_roles(*STAFF_ROLES)
 def manage_sermons(request):
     church = _require_church(request)
     if not church:
@@ -489,6 +523,7 @@ def manage_sermons(request):
 
 
 @login_required
+@require_church_roles(*STAFF_ROLES)
 def add_sermon(request):
     return _handle_church_form(
         request,
@@ -501,6 +536,7 @@ def add_sermon(request):
 
 
 @login_required
+@require_church_roles(*STAFF_ROLES)
 def edit_sermon(request, pk):
     return _handle_church_form(
         request,
@@ -516,6 +552,7 @@ def edit_sermon(request, pk):
 
 
 @login_required
+@require_church_roles(*STAFF_ROLES)
 def delete_sermon(request, pk):
     return _handle_church_delete(
         request,
@@ -529,6 +566,7 @@ def delete_sermon(request, pk):
 # --- CRUD Membres ---
 
 @login_required
+@require_church_roles(*MEMBER_ROLES)
 def manage_members(request):
     church = _require_church(request)
     if not church:
@@ -564,6 +602,7 @@ def manage_members(request):
 
 
 @login_required
+@require_church_roles(*MEMBER_ROLES)
 def add_member(request):
     return _handle_church_form(
         request,
@@ -576,6 +615,7 @@ def add_member(request):
 
 
 @login_required
+@require_church_roles(*MEMBER_ROLES)
 def edit_member(request, pk):
     return _handle_church_form(
         request,
@@ -591,6 +631,7 @@ def edit_member(request, pk):
 
 
 @login_required
+@require_church_roles(*MEMBER_ROLES)
 def delete_member(request, pk):
     return _handle_church_delete(
         request,
@@ -604,6 +645,7 @@ def delete_member(request, pk):
 # --- CRUD Pages ---
 
 @login_required
+@require_church_roles(*STAFF_ROLES)
 def manage_pages(request):
     church = _require_church(request)
     if not church:
@@ -636,6 +678,7 @@ def manage_pages(request):
 
 
 @login_required
+@require_church_roles(*STAFF_ROLES)
 def add_page(request):
     return _handle_church_form(
         request,
@@ -648,6 +691,7 @@ def add_page(request):
 
 
 @login_required
+@require_church_roles(*STAFF_ROLES)
 def edit_page(request, pk):
     return _handle_church_form(
         request,
@@ -663,6 +707,7 @@ def edit_page(request, pk):
 
 
 @login_required
+@require_church_roles(*STAFF_ROLES)
 def delete_page(request, pk):
     return _handle_church_delete(
         request,
@@ -673,9 +718,149 @@ def delete_page(request, pk):
     )
 
 
+# --- Utilisateurs & Rôles ---
+
+@login_required
+@require_church_roles(*ADMIN_ONLY)
+def manage_users(request):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+    memberships = ChurchMembership.objects.filter(church=church).select_related('user')
+    q = _get_text_param(request, 'q', 100)
+    if q:
+        memberships = memberships.filter(
+            Q(user__username__icontains=q) |
+            Q(user__email__icontains=q) |
+            Q(user__first_name__icontains=q) |
+            Q(user__last_name__icontains=q)
+        )
+    role = _get_choice_param(request, 'role', {r for r, _ in ChurchMembership.Role.choices})
+    if role:
+        memberships = memberships.filter(role=role)
+    status = _get_choice_param(request, 'status', {'active', 'inactive'})
+    if status == 'active':
+        memberships = memberships.filter(is_active=True)
+    elif status == 'inactive':
+        memberships = memberships.filter(is_active=False)
+    paginator = Paginator(memberships.order_by('user__last_name', 'user__first_name'), 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, 'admin_dashboard/manage_users.html', {
+        'church': church,
+        'memberships': page_obj,
+        'page_obj': page_obj,
+        'querystring': _querystring_without_page(request),
+    })
+
+
+@login_required
+@require_church_roles(*ADMIN_ONLY)
+def add_user(request):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+
+    if request.method == 'POST':
+        form = ChurchUserCreateForm(request.POST)
+        if form.is_valid():
+            form.save(church=church)
+            if is_ajax(request):
+                return JsonResponse({'success': True, 'message': 'Utilisateur créé !', 'redirect': reverse('manage_users')})
+            messages.success(request, 'Utilisateur créé !')
+            return redirect('manage_users')
+        if is_ajax(request):
+            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+    else:
+        form = ChurchUserCreateForm()
+
+    return render(request, 'admin_dashboard/user_form.html', {
+        'church': church,
+        'form': form,
+        'title': "Ajouter un utilisateur",
+    })
+
+
+@login_required
+@require_church_roles(*ADMIN_ONLY)
+def assign_user(request):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+
+    if request.method == 'POST':
+        form = ChurchMembershipAssignForm(request.POST, church=church)
+        if form.is_valid():
+            form.save(church=church)
+            if is_ajax(request):
+                return JsonResponse({'success': True, 'message': 'Utilisateur assigné !', 'redirect': reverse('manage_users')})
+            messages.success(request, 'Utilisateur assigné !')
+            return redirect('manage_users')
+        if is_ajax(request):
+            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+    else:
+        form = ChurchMembershipAssignForm(church=church)
+
+    return render(request, 'admin_dashboard/assign_user.html', {
+        'church': church,
+        'form': form,
+        'title': "Assigner un utilisateur",
+    })
+
+
+@login_required
+@require_church_roles(*ADMIN_ONLY)
+def edit_membership(request, pk):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+    membership = get_object_or_404(ChurchMembership, pk=pk, church=church)
+
+    if request.method == 'POST':
+        form = ChurchMembershipUpdateForm(request.POST, instance=membership)
+        if form.is_valid():
+            new_role = form.cleaned_data['role']
+            new_active = form.cleaned_data['is_active']
+            if (
+                membership.role == ChurchMembership.Role.ADMIN
+                and (new_role != ChurchMembership.Role.ADMIN or not new_active)
+            ):
+                other_admins = ChurchMembership.objects.filter(
+                    church=church,
+                    role=ChurchMembership.Role.ADMIN,
+                    is_active=True,
+                ).exclude(pk=membership.pk)
+                if not other_admins.exists():
+                    form.add_error('role', "Au moins un administrateur actif est requis.")
+                    if is_ajax(request):
+                        return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+                    return render(request, 'admin_dashboard/membership_form.html', {
+                        'church': church,
+                        'form': form,
+                        'title': "Modifier un utilisateur",
+                        'membership': membership,
+                    })
+            form.save()
+            if is_ajax(request):
+                return JsonResponse({'success': True, 'message': 'Rôle mis à jour !', 'redirect': reverse('manage_users')})
+            messages.success(request, 'Rôle mis à jour !')
+            return redirect('manage_users')
+        if is_ajax(request):
+            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+    else:
+        form = ChurchMembershipUpdateForm(instance=membership)
+
+    return render(request, 'admin_dashboard/membership_form.html', {
+        'church': church,
+        'form': form,
+        'title': "Modifier un utilisateur",
+        'membership': membership,
+    })
+
+
 # --- Messages de contact ---
 
 @login_required
+@require_church_roles(*SECRETARY_ROLES)
 def manage_messages(request):
     church = _require_church(request)
     if not church:
@@ -705,6 +890,7 @@ def manage_messages(request):
 
 
 @login_required
+@require_church_roles(*SECRETARY_ROLES)
 def read_message(request, pk):
     church = _require_church(request)
     if not church:

@@ -26,9 +26,12 @@ def church_context(request):
 
     site = SiteSettings.get()
 
+    membership = getattr(request, 'current_membership', None)
     menu_pages = getattr(church, 'menu_pages', None) if church else None
     return {
         'current_church': church,
+        'current_membership': membership,
+        'membership_role': membership.role if membership else None,
         'menu_pages': menu_pages,
         'app_name': site.site_name,
         'site_settings': site,

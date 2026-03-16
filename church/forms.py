@@ -11,7 +11,10 @@ On les personnalise ici pour :
 """
 
 from django import forms
-from .models import Church, Event, Sermon, Member, Page, ContactMessage, SiteSettings
+from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+
+from .models import Church, ChurchMembership, Event, Sermon, Member, Page, ContactMessage, SiteSettings
 
 
 class ChurchForm(forms.ModelForm):
@@ -111,3 +114,79 @@ class SiteSettingsForm(forms.ModelForm):
         widgets = {
             'site_description': forms.Textarea(attrs={'rows': 3}),
         }
+
+
+class ChurchUserCreateForm(forms.ModelForm):
+    role = forms.ChoiceField(choices=ChurchMembership.Role.choices)
+    password1 = forms.CharField(label="Mot de passe", widget=forms.PasswordInput)
+    password2 = forms.CharField(label="Confirmer le mot de passe", widget=forms.PasswordInput)
+
+    class Meta:
+        model = get_user_model()
+        fields = ['username', 'email', 'first_name', 'last_name', 'phone', 'is_active']
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password1 = cleaned_data.get('password1')
+        password2 = cleaned_data.get('password2')
+        if password1 and password2 and password1 != password2:
+            raise ValidationError("Les mots de passe ne correspondent pas.")
+        return cleaned_data
+
+    def save(self, church, commit=True):
+        user = super().save(commit=False)
+        user.set_password(self.cleaned_data['password1'])
+        if commit:
+            user.save()
+        ChurchMembership.objects.create(
+            user=user,
+            church=church,
+            role=self.cleaned_data['role'],
+            is_active=True,
+        )
+        return user
+
+
+class ChurchMembershipAssignForm(forms.Form):
+    identifier = forms.CharField(
+        label="Utilisateur (email ou nom d'utilisateur)",
+        max_length=150,
+    )
+    role = forms.ChoiceField(choices=ChurchMembership.Role.choices)
+
+    def __init__(self, *args, church=None, **kwargs):
+        self.user = None
+        self.church = church
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        identifier = cleaned_data.get('identifier')
+        if not identifier:
+            return cleaned_data
+        User = get_user_model()
+        user = User.objects.filter(username=identifier).first()
+        if not user:
+            user = User.objects.filter(email__iexact=identifier).first()
+        if not user:
+            raise ValidationError("Aucun utilisateur trouvé avec cet identifiant.")
+        if self.church and ChurchMembership.objects.filter(user=user, church=self.church).exists():
+            raise ValidationError("Cet utilisateur est déjà membre de cette église.")
+        self.user = user
+        return cleaned_data
+
+    def save(self, church):
+        if not self.user:
+            raise ValidationError("Utilisateur introuvable.")
+        return ChurchMembership.objects.create(
+            user=self.user,
+            church=church,
+            role=self.cleaned_data['role'],
+            is_active=True,
+        )
+
+
+class ChurchMembershipUpdateForm(forms.ModelForm):
+    class Meta:
+        model = ChurchMembership
+        fields = ['role', 'is_active']
