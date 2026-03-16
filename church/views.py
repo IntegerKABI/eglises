@@ -72,6 +72,71 @@ def _require_church(request):
     return church
 
 
+def _handle_church_form(
+    request,
+    form_class,
+    template_name,
+    success_message,
+    success_url_name,
+    title,
+    *,
+    instance=None,
+    object_name=None,
+    model=None,
+    pk=None,
+):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+
+    if instance is None and model is not None and pk is not None:
+        instance = get_object_or_404(model, pk=pk, church=church)
+
+    if request.method == 'POST':
+        form = form_class(request.POST, request.FILES, instance=instance)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            if hasattr(obj, 'church_id'):
+                obj.church = church
+            obj.save()
+            if hasattr(form, 'save_m2m'):
+                form.save_m2m()
+            if is_ajax(request):
+                return JsonResponse({
+                    'success': True,
+                    'message': success_message,
+                    'redirect': reverse(success_url_name),
+                })
+            messages.success(request, success_message)
+            return redirect(success_url_name)
+        if is_ajax(request):
+            return JsonResponse({'success': False, 'errors': form.errors})
+    else:
+        form = form_class(instance=instance)
+
+    context = {
+        'church': church,
+        'form': form,
+        'title': title,
+    }
+    if object_name and instance is not None:
+        context[object_name] = instance
+    return render(request, template_name, context)
+
+
+def _handle_church_delete(request, model, pk, success_message, success_url_name):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+    obj = get_object_or_404(model, pk=pk, church=church)
+    if request.method == 'POST':
+        obj.delete()
+        if is_ajax(request):
+            return JsonResponse({'success': True, 'message': success_message})
+        messages.success(request, success_message)
+    return redirect(success_url_name)
+
+
 # =============================================================
 #  VUES PUBLIQUES — Site visible par tous
 # =============================================================
@@ -336,73 +401,42 @@ def manage_events(request):
 @login_required
 def add_event(request):
     """Ajouter un événement."""
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-
-    if request.method == 'POST':
-        form = EventForm(request.POST, request.FILES)
-        if form.is_valid():
-            event = form.save(commit=False)
-            event.church = church
-            event.save()
-            if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Événement ajouté !', 'redirect': reverse('manage_events')})
-            messages.success(request, 'Événement ajouté !')
-            return redirect('manage_events')
-        elif is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors})
-    else:
-        form = EventForm()
-
-    return render(request, 'admin_dashboard/event_form.html', {
-        'church': church,
-        'form': form,
-        'title': 'Ajouter un événement',
-    })
+    return _handle_church_form(
+        request,
+        form_class=EventForm,
+        template_name='admin_dashboard/event_form.html',
+        success_message='Événement ajouté !',
+        success_url_name='manage_events',
+        title='Ajouter un événement',
+    )
 
 
 @login_required
 def edit_event(request, pk):
     """Modifier un événement."""
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-    event = get_object_or_404(Event, pk=pk, church=church)
-
-    if request.method == 'POST':
-        form = EventForm(request.POST, request.FILES, instance=event)
-        if form.is_valid():
-            form.save()
-            if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Événement modifié !', 'redirect': reverse('manage_events')})
-            messages.success(request, 'Événement modifié !')
-            return redirect('manage_events')
-        elif is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors})
-    else:
-        form = EventForm(instance=event)
-
-    return render(request, 'admin_dashboard/event_form.html', {
-        'church': church,
-        'form': form,
-        'title': 'Modifier l\'événement',
-    })
+    return _handle_church_form(
+        request,
+        form_class=EventForm,
+        template_name='admin_dashboard/event_form.html',
+        success_message='Événement modifié !',
+        success_url_name='manage_events',
+        title="Modifier l'événement",
+        model=Event,
+        pk=pk,
+        object_name='event',
+    )
 
 
 @login_required
 def delete_event(request, pk):
     """Supprimer un événement."""
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-    event = get_object_or_404(Event, pk=pk, church=church)
-    if request.method == 'POST':
-        event.delete()
-        if is_ajax(request):
-            return JsonResponse({'success': True, 'message': 'Événement supprimé !'})
-        messages.success(request, 'Événement supprimé !')
-    return redirect('manage_events')
+    return _handle_church_delete(
+        request,
+        model=Event,
+        pk=pk,
+        success_message='Événement supprimé !',
+        success_url_name='manage_events',
+    )
 
 
 # --- CRUD Prédications ---
@@ -443,71 +477,40 @@ def manage_sermons(request):
 
 @login_required
 def add_sermon(request):
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-
-    if request.method == 'POST':
-        form = SermonForm(request.POST, request.FILES)
-        if form.is_valid():
-            sermon = form.save(commit=False)
-            sermon.church = church
-            sermon.save()
-            if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Prédication ajoutée !', 'redirect': reverse('manage_sermons')})
-            messages.success(request, 'Prédication ajoutée !')
-            return redirect('manage_sermons')
-        elif is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors})
-    else:
-        form = SermonForm()
-
-    return render(request, 'admin_dashboard/sermon_form.html', {
-        'church': church,
-        'form': form,
-        'title': 'Ajouter une prédication',
-    })
+    return _handle_church_form(
+        request,
+        form_class=SermonForm,
+        template_name='admin_dashboard/sermon_form.html',
+        success_message='Prédication ajoutée !',
+        success_url_name='manage_sermons',
+        title='Ajouter une prédication',
+    )
 
 
 @login_required
 def edit_sermon(request, pk):
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-    sermon = get_object_or_404(Sermon, pk=pk, church=church)
-
-    if request.method == 'POST':
-        form = SermonForm(request.POST, request.FILES, instance=sermon)
-        if form.is_valid():
-            form.save()
-            if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Prédication modifiée !', 'redirect': reverse('manage_sermons')})
-            messages.success(request, 'Prédication modifiée !')
-            return redirect('manage_sermons')
-        elif is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors})
-    else:
-        form = SermonForm(instance=sermon)
-
-    return render(request, 'admin_dashboard/sermon_form.html', {
-        'church': church,
-        'form': form,
-        'title': 'Modifier la prédication',
-    })
+    return _handle_church_form(
+        request,
+        form_class=SermonForm,
+        template_name='admin_dashboard/sermon_form.html',
+        success_message='Prédication modifiée !',
+        success_url_name='manage_sermons',
+        title='Modifier la prédication',
+        model=Sermon,
+        pk=pk,
+        object_name='sermon',
+    )
 
 
 @login_required
 def delete_sermon(request, pk):
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-    sermon = get_object_or_404(Sermon, pk=pk, church=church)
-    if request.method == 'POST':
-        sermon.delete()
-        if is_ajax(request):
-            return JsonResponse({'success': True, 'message': 'Prédication supprimée !'})
-        messages.success(request, 'Prédication supprimée !')
-    return redirect('manage_sermons')
+    return _handle_church_delete(
+        request,
+        model=Sermon,
+        pk=pk,
+        success_message='Prédication supprimée !',
+        success_url_name='manage_sermons',
+    )
 
 
 # --- CRUD Membres ---
@@ -549,71 +552,40 @@ def manage_members(request):
 
 @login_required
 def add_member(request):
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-
-    if request.method == 'POST':
-        form = MemberForm(request.POST, request.FILES)
-        if form.is_valid():
-            member = form.save(commit=False)
-            member.church = church
-            member.save()
-            if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Membre ajouté !', 'redirect': reverse('manage_members')})
-            messages.success(request, 'Membre ajouté !')
-            return redirect('manage_members')
-        elif is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors})
-    else:
-        form = MemberForm()
-
-    return render(request, 'admin_dashboard/member_form.html', {
-        'church': church,
-        'form': form,
-        'title': 'Ajouter un membre',
-    })
+    return _handle_church_form(
+        request,
+        form_class=MemberForm,
+        template_name='admin_dashboard/member_form.html',
+        success_message='Membre ajouté !',
+        success_url_name='manage_members',
+        title='Ajouter un membre',
+    )
 
 
 @login_required
 def edit_member(request, pk):
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-    member = get_object_or_404(Member, pk=pk, church=church)
-
-    if request.method == 'POST':
-        form = MemberForm(request.POST, request.FILES, instance=member)
-        if form.is_valid():
-            form.save()
-            if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Membre modifié !', 'redirect': reverse('manage_members')})
-            messages.success(request, 'Membre modifié !')
-            return redirect('manage_members')
-        elif is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors})
-    else:
-        form = MemberForm(instance=member)
-
-    return render(request, 'admin_dashboard/member_form.html', {
-        'church': church,
-        'form': form,
-        'title': 'Modifier le membre',
-    })
+    return _handle_church_form(
+        request,
+        form_class=MemberForm,
+        template_name='admin_dashboard/member_form.html',
+        success_message='Membre modifié !',
+        success_url_name='manage_members',
+        title='Modifier le membre',
+        model=Member,
+        pk=pk,
+        object_name='member',
+    )
 
 
 @login_required
 def delete_member(request, pk):
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-    member = get_object_or_404(Member, pk=pk, church=church)
-    if request.method == 'POST':
-        member.delete()
-        if is_ajax(request):
-            return JsonResponse({'success': True, 'message': 'Membre supprimé !'})
-        messages.success(request, 'Membre supprimé !')
-    return redirect('manage_members')
+    return _handle_church_delete(
+        request,
+        model=Member,
+        pk=pk,
+        success_message='Membre supprimé !',
+        success_url_name='manage_members',
+    )
 
 
 # --- CRUD Pages ---
@@ -652,72 +624,40 @@ def manage_pages(request):
 
 @login_required
 def add_page(request):
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-
-    if request.method == 'POST':
-        form = PageForm(request.POST, request.FILES)
-        if form.is_valid():
-            page = form.save(commit=False)
-            page.church = church
-            page.save()
-            if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Page ajoutÃ©e !', 'redirect': reverse('manage_pages')})
-            messages.success(request, 'Page ajoutÃ©e !')
-            return redirect('manage_pages')
-        elif is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors})
-    else:
-        form = PageForm()
-
-    return render(request, 'admin_dashboard/page_form.html', {
-        'church': church,
-        'form': form,
-        'title': 'Ajouter une page',
-    })
+    return _handle_church_form(
+        request,
+        form_class=PageForm,
+        template_name='admin_dashboard/page_form.html',
+        success_message='Page ajoutée !',
+        success_url_name='manage_pages',
+        title='Ajouter une page',
+    )
 
 
 @login_required
 def edit_page(request, pk):
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-    page = get_object_or_404(Page, pk=pk, church=church)
-
-    if request.method == 'POST':
-        form = PageForm(request.POST, request.FILES, instance=page)
-        if form.is_valid():
-            form.save()
-            if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Page modifiÃ©e !', 'redirect': reverse('manage_pages')})
-            messages.success(request, 'Page modifiÃ©e !')
-            return redirect('manage_pages')
-        elif is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors})
-    else:
-        form = PageForm(instance=page)
-
-    return render(request, 'admin_dashboard/page_form.html', {
-        'church': church,
-        'form': form,
-        'title': 'Modifier la page',
-        'page': page,
-    })
+    return _handle_church_form(
+        request,
+        form_class=PageForm,
+        template_name='admin_dashboard/page_form.html',
+        success_message='Page modifiée !',
+        success_url_name='manage_pages',
+        title='Modifier la page',
+        model=Page,
+        pk=pk,
+        object_name='page',
+    )
 
 
 @login_required
 def delete_page(request, pk):
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-    page = get_object_or_404(Page, pk=pk, church=church)
-    if request.method == 'POST':
-        page.delete()
-        if is_ajax(request):
-            return JsonResponse({'success': True, 'message': 'Page supprimÃ©e !'})
-        messages.success(request, 'Page supprimÃ©e !')
-    return redirect('manage_pages')
+    return _handle_church_delete(
+        request,
+        model=Page,
+        pk=pk,
+        success_message='Page supprimée !',
+        success_url_name='manage_pages',
+    )
 
 
 # --- Messages de contact ---
