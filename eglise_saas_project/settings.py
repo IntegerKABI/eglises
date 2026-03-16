@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     'crispy_bootstrap5',             # Template pack Bootstrap 5
 
     # Notre app
+    'accounts',
     'church',                        # L'application Ã©glise
 ]
 
@@ -92,6 +93,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',            # URL trailing slash, etc.
     'django.middleware.csrf.CsrfViewMiddleware',           # Protection contre les attaques CSRF
     'django.contrib.auth.middleware.AuthenticationMiddleware', # Identification de l'utilisateur
+    'church.middleware.CurrentChurchMiddleware',           # RÃ©solution de l'Ã©glise courante
     'django.contrib.messages.middleware.MessageMiddleware', # Messages flash
     'django.middleware.clickjacking.XFrameOptionsMiddleware', # Protection contre le clickjacking
 ]
@@ -184,3 +186,5 @@ LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+AUTH_USER_MODEL = 'accounts.User'

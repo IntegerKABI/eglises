@@ -1,16 +1,35 @@
-from .models import Church
+from django.db.models import Prefetch
+
+from .models import Church, Page
 
 
-def get_accessible_churches(user):
+def _menu_pages_queryset():
+    return Page.objects.filter(is_active=True, is_in_menu=True).only(
+        'id',
+        'church_id',
+        'slug',
+        'title',
+        'is_in_menu',
+        'is_active',
+    )
+
+
+def get_accessible_churches(user, prefetch_pages=False):
     if not user.is_authenticated:
         return Church.objects.none()
     if user.is_superuser:
-        return Church.objects.all()
-    return Church.objects.filter(admin=user)
+        churches = Church.objects.all()
+    else:
+        churches = Church.objects.filter(admin=user)
+    if prefetch_pages:
+        churches = churches.prefetch_related(
+            Prefetch('pages', queryset=_menu_pages_queryset(), to_attr='menu_pages')
+        )
+    return churches
 
 
-def get_selected_church(request):
-    churches = get_accessible_churches(request.user)
+def get_selected_church(request, prefetch_pages=False):
+    churches = get_accessible_churches(request.user, prefetch_pages=prefetch_pages)
     if not churches.exists():
         return None
 

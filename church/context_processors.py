@@ -11,8 +11,7 @@ sans qu'on ait besoin de les passer manuellement dans chaque vue.
 =================================================================
 """
 
-from .models import Church, SiteSettings
-from .tenancy import get_selected_church
+from .models import SiteSettings
 
 
 def church_context(request):
@@ -23,22 +22,14 @@ def church_context(request):
     1. Le slug dans l'URL (ex: /eglise/demo/...)
     2. La sÃ©lection de l'utilisateur connectÃ©
     """
-    church = None
-    churches = Church.objects.filter(is_active=True)
-
-    # Essayer de trouver l'Ã©glise depuis l'URL
-    church_slug = request.resolver_match.kwargs.get('church_slug') if request.resolver_match else None
-
-    if church_slug:
-        church = churches.filter(slug=church_slug).first()
-    elif request.user.is_authenticated:
-        church = get_selected_church(request)
+    church = getattr(request, 'current_church', None)
 
     site = SiteSettings.get()
 
+    menu_pages = getattr(church, 'menu_pages', None) if church else None
     return {
         'current_church': church,
-        'all_churches': churches,
+        'menu_pages': menu_pages,
         'app_name': site.site_name,
         'site_settings': site,
     }

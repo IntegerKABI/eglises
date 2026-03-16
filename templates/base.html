@@ -86,15 +86,25 @@ commun UNE SEULE FOIS ici.
                                 <i class="bi bi-book"></i> Prédications
                             </a>
                         </li>
-                        {% for page in current_church.pages.all %}
-                            {% if page.is_in_menu and page.is_active %}
+                        {% if menu_pages is not None %}
+                            {% for page in menu_pages %}
                             <li class="nav-item">
                                 <a class="nav-link" href="{% url 'church_page' current_church.slug page.slug %}">
                                     {{ page.title }}
                                 </a>
                             </li>
-                            {% endif %}
-                        {% endfor %}
+                            {% endfor %}
+                        {% else %}
+                            {% for page in current_church.pages.all %}
+                                {% if page.is_in_menu and page.is_active %}
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{% url 'church_page' current_church.slug page.slug %}">
+                                        {{ page.title }}
+                                    </a>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'church_contact' current_church.slug %}">
                                 <i class="bi bi-envelope"></i> Contact

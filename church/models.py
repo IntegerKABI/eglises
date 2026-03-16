@@ -14,8 +14,12 @@ ARCHITECTURE :
 =================================================================
 """
 
+import os
+from uuid import uuid4
+
+from django.conf import settings
 from django.db import models
-from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.utils.html import strip_tags
 from django.utils.text import slugify
@@ -35,6 +39,42 @@ def _generate_unique_slug(base_value, queryset, max_length, fallback):
         slug = f"{trimmed}{suffix}"
         counter += 1
     return slug
+
+
+SITE_SETTINGS_CACHE_KEY = "site_settings:singleton:v1"
+
+
+def _uuid_filename(filename):
+    _, ext = os.path.splitext(filename)
+    return f"{uuid4().hex}{ext.lower()}"
+
+
+def upload_church_logo(instance, filename):
+    return f"churches/logos/{_uuid_filename(filename)}"
+
+
+def upload_church_cover(instance, filename):
+    return f"churches/covers/{_uuid_filename(filename)}"
+
+
+def upload_event_image(instance, filename):
+    return f"events/{_uuid_filename(filename)}"
+
+
+def upload_sermon_image(instance, filename):
+    return f"sermons/{_uuid_filename(filename)}"
+
+
+def upload_member_photo(instance, filename):
+    return f"members/{_uuid_filename(filename)}"
+
+
+def upload_page_image(instance, filename):
+    return f"pages/{_uuid_filename(filename)}"
+
+
+def upload_site_asset(instance, filename):
+    return f"site/{_uuid_filename(filename)}"
 
 
 class Church(models.Model):
@@ -60,13 +100,13 @@ class Church(models.Model):
         verbose_name="Description"
     )
     logo = models.ImageField(
-        upload_to='churches/logos/',
+        upload_to=upload_church_logo,
         blank=True,
         null=True,
         verbose_name="Logo"
     )
     cover_image = models.ImageField(
-        upload_to='churches/covers/',
+        upload_to=upload_church_cover,
         blank=True,
         null=True,
         verbose_name="Image de couverture"
@@ -112,7 +152,7 @@ class Church(models.Model):
 
     # Administration
     admin = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -160,7 +200,7 @@ class Event(models.Model):
     title = models.CharField(max_length=255, verbose_name="Titre")
     description = models.TextField(blank=True, verbose_name="Description")
     image = models.ImageField(
-        upload_to='events/',
+        upload_to=upload_event_image,
         blank=True,
         null=True,
         verbose_name="Image"
@@ -212,7 +252,7 @@ class Sermon(models.Model):
     preacher = models.CharField(max_length=150, blank=True, verbose_name="Prédicateur")
     description = models.TextField(blank=True, verbose_name="Description")
     image = models.ImageField(
-        upload_to='sermons/',
+        upload_to=upload_sermon_image,
         blank=True,
         null=True,
         verbose_name="Image"
@@ -279,7 +319,7 @@ class Member(models.Model):
         verbose_name="Département/Ministère"
     )
     photo = models.ImageField(
-        upload_to='members/',
+        upload_to=upload_member_photo,
         blank=True,
         null=True,
         verbose_name="Photo"
@@ -320,7 +360,7 @@ class Page(models.Model):
     slug = models.SlugField(max_length=100, verbose_name="Identifiant URL")
     content = models.TextField(blank=True, verbose_name="Contenu")
     image = models.ImageField(
-        upload_to='pages/',
+        upload_to=upload_page_image,
         blank=True,
         null=True,
         verbose_name="Image"
@@ -413,13 +453,13 @@ class SiteSettings(models.Model):
         verbose_name="Description courte"
     )
     site_logo = models.ImageField(
-        upload_to='site/',
+        upload_to=upload_site_asset,
         blank=True,
         null=True,
         verbose_name="Logo de la plateforme"
     )
     cover_image = models.ImageField(
-        upload_to='site/',
+        upload_to=upload_site_asset,
         blank=True,
         null=True,
         verbose_name="Image de couverture",
@@ -441,9 +481,14 @@ class SiteSettings(models.Model):
         """Force l'ID à 1 pour garantir une seule ligne (singleton)."""
         self.pk = 1
         super().save(*args, **kwargs)
+        cache.delete(SITE_SETTINGS_CACHE_KEY)
 
     @classmethod
     def get(cls):
         """Retourne l'instance unique, ou en crée une avec les valeurs par défaut."""
+        cached = cache.get(SITE_SETTINGS_CACHE_KEY)
+        if cached:
+            return cached
         obj, _ = cls.objects.get_or_create(pk=1)
+        cache.set(SITE_SETTINGS_CACHE_KEY, obj)
         return obj

@@ -20,7 +20,7 @@ Il y a 2 sections :
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import JsonResponse, Http404
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.urls import reverse
@@ -66,10 +66,23 @@ def _get_choice_param(request, key, allowed):
 
 
 def _require_church(request):
-    church = get_selected_church(request)
+    church = getattr(request, 'current_church', None)
+    if church is None:
+        church = get_selected_church(request, prefetch_pages=True)
+        request.current_church = church
     if not church:
         messages.warning(request, "Sélectionnez une église pour continuer.")
     return church
+
+
+def _get_public_church(request, church_slug):
+    church = getattr(request, 'current_church', None)
+    current_slug = getattr(request, 'current_church_slug', None)
+    if current_slug == church_slug:
+        if church is None:
+            raise Http404("Église introuvable.")
+        return church
+    return get_object_or_404(Church, slug=church_slug, is_active=True)
 
 
 def _handle_church_form(
@@ -110,7 +123,7 @@ def _handle_church_form(
             messages.success(request, success_message)
             return redirect(success_url_name)
         if is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors})
+            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
     else:
         form = form_class(instance=instance)
 
@@ -165,7 +178,7 @@ def church_home(request, church_slug):
     Page d'accueil d'une église spécifique.
     Ex: /eglise/demo/ → affiche l'église avec le slug "demo"
     """
-    church = get_object_or_404(Church, slug=church_slug, is_active=True)
+    church = _get_public_church(request, church_slug)
     upcoming_events = church.events.filter(
         is_active=True,
         event_date__gte=timezone.now().date()
@@ -183,7 +196,7 @@ def church_home(request, church_slug):
 
 def church_events(request, church_slug):
     """Liste de tous les événements d'une église."""
-    church = get_object_or_404(Church, slug=church_slug, is_active=True)
+    church = _get_public_church(request, church_slug)
     events = church.events.filter(is_active=True)
     q = _get_text_param(request, 'q', 100)
     if q:
@@ -215,7 +228,7 @@ def church_events(request, church_slug):
 
 def church_sermons(request, church_slug):
     """Liste de toutes les prédications d'une église."""
-    church = get_object_or_404(Church, slug=church_slug, is_active=True)
+    church = _get_public_church(request, church_slug)
     sermons = church.sermons.filter(is_active=True)
     q = _get_text_param(request, 'q', 100)
     if q:
@@ -242,7 +255,7 @@ def church_sermons(request, church_slug):
 
 def church_page(request, church_slug, page_slug):
     """Affiche une page dynamique personnalisée."""
-    church = get_object_or_404(Church, slug=church_slug, is_active=True)
+    church = _get_public_church(request, church_slug)
     page = get_object_or_404(Page, church=church, slug=page_slug, is_active=True)
     return render(request, 'church/custom_page.html', {
         'church': church,
@@ -252,7 +265,7 @@ def church_page(request, church_slug, page_slug):
 
 def church_contact(request, church_slug):
     """Formulaire de contact d'une église."""
-    church = get_object_or_404(Church, slug=church_slug, is_active=True)
+    church = _get_public_church(request, church_slug)
 
     if request.method == 'POST':
         form = ContactForm(request.POST)
@@ -265,7 +278,7 @@ def church_contact(request, church_slug):
             messages.success(request, 'Votre message a été envoyé avec succès !')
             return redirect('church_contact', church_slug=church_slug)
         elif is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors})
+            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
     else:
         form = ContactForm()
 
@@ -346,7 +359,7 @@ def church_settings(request):
             messages.success(request, 'Paramètres mis à jour avec succès !')
             return redirect('church_settings')
         elif is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors})
+            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
     else:
         form = ChurchForm(instance=church)
 
@@ -732,7 +745,7 @@ def site_settings(request):
             messages.success(request, 'Paramètres de la plateforme mis à jour !')
             return redirect('site_settings')
         elif is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors})
+            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
     else:
         form = SiteSettingsForm(instance=settings_obj)
 

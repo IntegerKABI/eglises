@@ -12,7 +12,7 @@ Cette commande crée :
 """
 
 from django.core.management.base import BaseCommand
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from church.models import Church, Event, Sermon, Member, Page
 from datetime import date, timedelta
 
@@ -22,6 +22,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         # 1. Créer le super-utilisateur
+        User = get_user_model()
         if not User.objects.filter(username='admin').exists():
             user = User.objects.create_superuser(
                 username='admin',
