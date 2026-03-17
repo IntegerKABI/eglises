@@ -104,7 +104,7 @@
                                 <small class="text-muted">{{ notif.body }}</small>
                             {% endif %}
                             {% if notif.link %}
-                                <div><a href="{{ notif.link }}">Ouvrir</a></div>
+                                <div><a href="{% url 'open_notification' notif.pk %}">Ouvrir</a></div>
                             {% endif %}
                         </td>
                         <td>{{ notif.created_at|date:"d/m/Y H:i" }}</td>

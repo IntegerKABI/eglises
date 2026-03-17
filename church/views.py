@@ -29,6 +29,7 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 
 from .models import (
@@ -147,6 +148,17 @@ def _send_invite_email(request, invite):
         [invite.email],
         fail_silently=False,
     )
+
+
+def _mark_invite_notifications_read(user, invite):
+    Notification.objects.filter(
+        recipient=user,
+        church=invite.church,
+        category=Notification.Category.INVITE,
+        is_read=False,
+    ).filter(
+        Q(link__icontains=str(invite.token)) | Q(title__icontains="Invitation")
+    ).update(is_read=True)
 
 
 def _require_church(request):
@@ -474,6 +486,7 @@ def accept_invite(request, token):
                 body=f"{request.user.get_full_name() or request.user.username} a accepté l'invitation.",
                 link=reverse('manage_users'),
             )
+        _mark_invite_notifications_read(request.user, invite)
         messages.success(request, "Invitation acceptée. Bienvenue !")
         return redirect('dashboard')
 
@@ -1114,6 +1127,9 @@ def revoke_invite(request, pk):
     if request.method == 'POST' and invite.status == ChurchInvitation.Status.PENDING:
         invite.status = ChurchInvitation.Status.REVOKED
         invite.save(update_fields=['status'])
+        invited_user = get_user_model().objects.filter(email__iexact=invite.email).first()
+        if invited_user:
+            _mark_invite_notifications_read(invited_user, invite)
         notify_church_admins(
             church,
             category="invite",
@@ -1423,6 +1439,30 @@ def manage_notifications(request):
         'page_obj': page_obj,
         'querystring': _querystring_without_page(request),
     })
+
+
+@login_required
+@require_capability(CAP_VIEW_DASHBOARD)
+def open_notification(request, pk):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+    notification = get_object_or_404(
+        Notification,
+        pk=pk,
+        recipient=request.user,
+    )
+    if not notification.is_read:
+        notification.is_read = True
+        notification.save(update_fields=['is_read'])
+    target = notification.link
+    if target and url_has_allowed_host_and_scheme(
+        target,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return redirect(target)
+    return redirect('manage_notifications')
 
 
 @login_required
