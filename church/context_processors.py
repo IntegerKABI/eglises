@@ -12,6 +12,7 @@ sans qu'on ait besoin de les passer manuellement dans chaque vue.
 """
 
 from .models import SiteSettings
+from .permissions import get_capabilities_for_request
 
 
 def church_context(request):
@@ -28,11 +29,13 @@ def church_context(request):
 
     membership = getattr(request, 'current_membership', None)
     menu_pages = getattr(church, 'menu_pages', None) if church else None
+    capabilities = get_capabilities_for_request(request)
     return {
         'current_church': church,
         'current_membership': membership,
         'membership_role': membership.role if membership else None,
         'menu_pages': menu_pages,
+        'capabilities': capabilities,
         'app_name': site.site_name,
         'site_settings': site,
     }

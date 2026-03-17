@@ -16,38 +16,42 @@
                             <i class="bi bi-house"></i> Vue d'ensemble
                         </a>
                     </li>
-                    {% if user.is_superuser or membership_role == "admin" %}
+                    {% if "manage_church_settings" in capabilities %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'church_settings' %}">
                             <i class="bi bi-gear"></i> Paramètres
                         </a>
                     </li>
                     {% endif %}
-                    {% if user.is_superuser or membership_role == "admin" or membership_role == "staff" %}
+                    {% if "manage_events" in capabilities %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'manage_events' %}">
                             <i class="bi bi-calendar-event"></i> Événements
                         </a>
                     </li>
+                    {% endif %}
+                    {% if "manage_sermons" in capabilities %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'manage_sermons' %}">
                             <i class="bi bi-book"></i> Prédications
                         </a>
                     </li>
+                    {% endif %}
+                    {% if "manage_pages" in capabilities %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'manage_pages' %}">
                             <i class="bi bi-file-earmark-text"></i> Pages
                         </a>
                     </li>
                     {% endif %}
-                    {% if user.is_superuser or membership_role == "admin" or membership_role == "staff" or membership_role == "secretary" %}
+                    {% if "manage_members" in capabilities %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'manage_members' %}">
                             <i class="bi bi-people"></i> Membres
                         </a>
                     </li>
                     {% endif %}
-                    {% if user.is_superuser or membership_role == "admin" or membership_role == "secretary" %}
+                    {% if "manage_messages" in capabilities %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'manage_messages' %}">
                             <i class="bi bi-envelope"></i> Messages
@@ -57,7 +61,7 @@
                         </a>
                     </li>
                     {% endif %}
-                    {% if user.is_superuser or membership_role == "admin" %}
+                    {% if "manage_users" in capabilities %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'manage_users' %}">
                             <i class="bi bi-person-gear"></i> Utilisateurs
@@ -65,7 +69,7 @@
                     </li>
                     {% endif %}
                 </ul>
-                {% if user.is_superuser %}
+                {% if "manage_site_settings" in capabilities %}
                 <hr>
                 <h6 class="text-uppercase text-muted mb-3">
                     <i class="bi bi-shield-lock"></i> Super Admin

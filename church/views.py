@@ -48,11 +48,16 @@ from .forms import (
     SiteSettingsForm,
 )
 from .permissions import (
-    ADMIN_ONLY,
-    MEMBER_ROLES,
-    SECRETARY_ROLES,
-    STAFF_ROLES,
-    require_church_roles,
+    CAP_MANAGE_CHURCH_SETTINGS,
+    CAP_MANAGE_EVENTS,
+    CAP_MANAGE_MEMBERS,
+    CAP_MANAGE_MESSAGES,
+    CAP_MANAGE_PAGES,
+    CAP_MANAGE_SERMONS,
+    CAP_MANAGE_SITE_SETTINGS,
+    CAP_MANAGE_USERS,
+    CAP_VIEW_DASHBOARD,
+    require_capability,
 )
 from .tenancy import get_accessible_churches, get_membership, get_selected_church
 
@@ -458,7 +463,7 @@ def select_church(request):
 # =============================================================
 
 @login_required
-@require_church_roles(*MEMBER_ROLES)
+@require_capability(CAP_VIEW_DASHBOARD)
 def dashboard(request):
     """
     Tableau de bord principal.
@@ -484,7 +489,7 @@ def dashboard(request):
 
 
 @login_required
-@require_church_roles(*ADMIN_ONLY)
+@require_capability(CAP_MANAGE_CHURCH_SETTINGS)
 def church_settings(request):
     """Paramètres de l'église (nom, logo, couleurs, etc.)."""
     church = _require_church(request)
@@ -513,7 +518,7 @@ def church_settings(request):
 # --- CRUD Événements ---
 
 @login_required
-@require_church_roles(*STAFF_ROLES)
+@require_capability(CAP_MANAGE_EVENTS)
 def manage_events(request):
     """Liste des événements (dashboard)."""
     church = _require_church(request)
@@ -554,7 +559,7 @@ def manage_events(request):
 
 
 @login_required
-@require_church_roles(*STAFF_ROLES)
+@require_capability(CAP_MANAGE_EVENTS)
 def add_event(request):
     """Ajouter un événement."""
     return _handle_church_form(
@@ -568,7 +573,7 @@ def add_event(request):
 
 
 @login_required
-@require_church_roles(*STAFF_ROLES)
+@require_capability(CAP_MANAGE_EVENTS)
 def edit_event(request, pk):
     """Modifier un événement."""
     return _handle_church_form(
@@ -585,7 +590,7 @@ def edit_event(request, pk):
 
 
 @login_required
-@require_church_roles(*STAFF_ROLES)
+@require_capability(CAP_MANAGE_EVENTS)
 def delete_event(request, pk):
     """Supprimer un événement."""
     return _handle_church_delete(
@@ -600,7 +605,7 @@ def delete_event(request, pk):
 # --- CRUD Prédications ---
 
 @login_required
-@require_church_roles(*STAFF_ROLES)
+@require_capability(CAP_MANAGE_SERMONS)
 def manage_sermons(request):
     church = _require_church(request)
     if not church:
@@ -635,7 +640,7 @@ def manage_sermons(request):
 
 
 @login_required
-@require_church_roles(*STAFF_ROLES)
+@require_capability(CAP_MANAGE_SERMONS)
 def add_sermon(request):
     return _handle_church_form(
         request,
@@ -648,7 +653,7 @@ def add_sermon(request):
 
 
 @login_required
-@require_church_roles(*STAFF_ROLES)
+@require_capability(CAP_MANAGE_SERMONS)
 def edit_sermon(request, pk):
     return _handle_church_form(
         request,
@@ -664,7 +669,7 @@ def edit_sermon(request, pk):
 
 
 @login_required
-@require_church_roles(*STAFF_ROLES)
+@require_capability(CAP_MANAGE_SERMONS)
 def delete_sermon(request, pk):
     return _handle_church_delete(
         request,
@@ -678,7 +683,7 @@ def delete_sermon(request, pk):
 # --- CRUD Membres ---
 
 @login_required
-@require_church_roles(*MEMBER_ROLES)
+@require_capability(CAP_MANAGE_MEMBERS)
 def manage_members(request):
     church = _require_church(request)
     if not church:
@@ -714,7 +719,7 @@ def manage_members(request):
 
 
 @login_required
-@require_church_roles(*MEMBER_ROLES)
+@require_capability(CAP_MANAGE_MEMBERS)
 def add_member(request):
     return _handle_church_form(
         request,
@@ -727,7 +732,7 @@ def add_member(request):
 
 
 @login_required
-@require_church_roles(*MEMBER_ROLES)
+@require_capability(CAP_MANAGE_MEMBERS)
 def edit_member(request, pk):
     return _handle_church_form(
         request,
@@ -743,7 +748,7 @@ def edit_member(request, pk):
 
 
 @login_required
-@require_church_roles(*MEMBER_ROLES)
+@require_capability(CAP_MANAGE_MEMBERS)
 def delete_member(request, pk):
     return _handle_church_delete(
         request,
@@ -757,7 +762,7 @@ def delete_member(request, pk):
 # --- CRUD Pages ---
 
 @login_required
-@require_church_roles(*STAFF_ROLES)
+@require_capability(CAP_MANAGE_PAGES)
 def manage_pages(request):
     church = _require_church(request)
     if not church:
@@ -790,7 +795,7 @@ def manage_pages(request):
 
 
 @login_required
-@require_church_roles(*STAFF_ROLES)
+@require_capability(CAP_MANAGE_PAGES)
 def add_page(request):
     return _handle_church_form(
         request,
@@ -803,7 +808,7 @@ def add_page(request):
 
 
 @login_required
-@require_church_roles(*STAFF_ROLES)
+@require_capability(CAP_MANAGE_PAGES)
 def edit_page(request, pk):
     return _handle_church_form(
         request,
@@ -819,7 +824,7 @@ def edit_page(request, pk):
 
 
 @login_required
-@require_church_roles(*STAFF_ROLES)
+@require_capability(CAP_MANAGE_PAGES)
 def delete_page(request, pk):
     return _handle_church_delete(
         request,
@@ -833,7 +838,7 @@ def delete_page(request, pk):
 # --- Utilisateurs & Rôles ---
 
 @login_required
-@require_church_roles(*ADMIN_ONLY)
+@require_capability(CAP_MANAGE_USERS)
 def manage_users(request):
     church = _require_church(request)
     if not church:
@@ -876,7 +881,7 @@ def manage_users(request):
 
 
 @login_required
-@require_church_roles(*ADMIN_ONLY)
+@require_capability(CAP_MANAGE_USERS)
 def add_user(request):
     church = _require_church(request)
     if not church:
@@ -903,7 +908,7 @@ def add_user(request):
 
 
 @login_required
-@require_church_roles(*ADMIN_ONLY)
+@require_capability(CAP_MANAGE_USERS)
 def assign_user(request):
     church = _require_church(request)
     if not church:
@@ -930,7 +935,7 @@ def assign_user(request):
 
 
 @login_required
-@require_church_roles(*ADMIN_ONLY)
+@require_capability(CAP_MANAGE_USERS)
 def invite_user(request):
     church = _require_church(request)
     if not church:
@@ -965,7 +970,7 @@ def invite_user(request):
 
 
 @login_required
-@require_church_roles(*ADMIN_ONLY)
+@require_capability(CAP_MANAGE_USERS)
 def revoke_invite(request, pk):
     church = _require_church(request)
     if not church:
@@ -979,7 +984,7 @@ def revoke_invite(request, pk):
 
 
 @login_required
-@require_church_roles(*ADMIN_ONLY)
+@require_capability(CAP_MANAGE_USERS)
 def resend_invite(request, pk):
     church = _require_church(request)
     if not church:
@@ -997,7 +1002,7 @@ def resend_invite(request, pk):
 
 
 @login_required
-@require_church_roles(*ADMIN_ONLY)
+@require_capability(CAP_MANAGE_USERS)
 def toggle_membership(request, pk):
     church = _require_church(request)
     if not church:
@@ -1022,7 +1027,7 @@ def toggle_membership(request, pk):
 
 
 @login_required
-@require_church_roles(*ADMIN_ONLY)
+@require_capability(CAP_MANAGE_USERS)
 def transfer_admin(request):
     church = _require_church(request)
     if not church:
@@ -1062,7 +1067,7 @@ def transfer_admin(request):
 
 
 @login_required
-@require_church_roles(*ADMIN_ONLY)
+@require_capability(CAP_MANAGE_USERS)
 def edit_membership(request, pk):
     church = _require_church(request)
     if not church:
@@ -1093,7 +1098,7 @@ def edit_membership(request, pk):
 # --- Messages de contact ---
 
 @login_required
-@require_church_roles(*SECRETARY_ROLES)
+@require_capability(CAP_MANAGE_MESSAGES)
 def manage_messages(request):
     church = _require_church(request)
     if not church:
@@ -1123,7 +1128,7 @@ def manage_messages(request):
 
 
 @login_required
-@require_church_roles(*SECRETARY_ROLES)
+@require_capability(CAP_MANAGE_MESSAGES)
 def read_message(request, pk):
     church = _require_church(request)
     if not church:
@@ -1146,12 +1151,9 @@ def read_message(request, pk):
 # --- Paramètres globaux (super-admin uniquement) ---
 
 @login_required
+@require_capability(CAP_MANAGE_SITE_SETTINGS)
 def site_settings(request):
     """Paramètres globaux de la plateforme (nom, slogan, etc.)."""
-    if not request.user.is_superuser:
-        messages.error(request, "Accès réservé au super-administrateur.")
-        return redirect('dashboard')
-
     settings_obj = SiteSettings.get()
     church = get_selected_church(request)
 

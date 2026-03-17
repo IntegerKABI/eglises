@@ -14,7 +14,7 @@
     <a href="{% url 'invite_user' %}" class="btn btn-outline-primary">
         <i class="bi bi-envelope-plus"></i> Inviter par email
     </a>
-    {% if membership_role == "admin" %}
+    {% if "manage_users" in capabilities %}
     <a href="{% url 'transfer_admin' %}" class="btn btn-outline-danger">
         <i class="bi bi-shuffle"></i> Transférer admin
     </a>
