@@ -4,14 +4,61 @@
 {% block dashboard_content %}
 <h1 class="mb-4"><i class="bi bi-envelope-open"></i> Message</h1>
 
-{% if not msg.is_read %}
-<form method="post" class="mb-3">
-    {% csrf_token %}
-    <button type="submit" class="btn btn-church">
-        <i class="bi bi-check-lg"></i> Marquer comme lu
-    </button>
-</form>
-{% endif %}
+<div class="d-flex flex-wrap gap-2 mb-3">
+    <span class="badge bg-light text-dark border align-self-center">
+        {% if msg.status == 'new' %}
+            Nouveau
+        {% elif msg.status == 'read' %}
+            Lu
+        {% elif msg.status == 'responded' %}
+            Répondu
+        {% elif msg.status == 'archived' %}
+            Archivé
+        {% else %}
+            Inconnu
+        {% endif %}
+    </span>
+    {% if msg.status == 'new' %}
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="mark_read">
+        <button type="submit" class="btn btn-church">
+            <i class="bi bi-check-lg"></i> Marquer comme lu
+        </button>
+    </form>
+    {% endif %}
+    {% if msg.status != 'archived' %}
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="archive">
+        <button type="submit" class="btn btn-outline-secondary">
+            <i class="bi bi-archive"></i> Archiver
+        </button>
+    </form>
+    {% endif %}
+    {% if msg.assigned_to %}
+        <span class="badge bg-info text-dark align-self-center">
+            Assigné à {{ msg.assigned_to.get_full_name|default:msg.assigned_to.username }}
+        </span>
+        {% if msg.assigned_to == request.user %}
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="unassign">
+            <button type="submit" class="btn btn-outline-secondary">
+                <i class="bi bi-person-x"></i> Retirer l'assignation
+            </button>
+        </form>
+        {% endif %}
+    {% else %}
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="assign_me">
+            <button type="submit" class="btn btn-outline-primary">
+                <i class="bi bi-person-check"></i> M'assigner
+            </button>
+        </form>
+    {% endif %}
+</div>
 
 <div class="card border-0 shadow-sm">
     <div class="card-body p-4">
@@ -33,6 +80,44 @@
         </dl>
     </div>
 </div>
+
+{% if msg.status != 'archived' %}
+<div class="card border-0 shadow-sm mt-4">
+    <div class="card-body p-4">
+        <h5 class="mb-3">Répondre</h5>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="respond">
+            {{ reply_form.body }}
+            {% if reply_form.errors %}
+            <div class="text-danger small mt-2">{{ reply_form.errors.body }}</div>
+            {% endif %}
+            <button type="submit" class="btn btn-church mt-3">
+                <i class="bi bi-send"></i> Enregistrer la réponse
+            </button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% if replies %}
+<div class="card border-0 shadow-sm mt-4">
+    <div class="card-body p-4">
+        <h5 class="mb-3">Historique des réponses</h5>
+        <ul class="list-group list-group-flush">
+            {% for reply in replies %}
+            <li class="list-group-item px-0">
+                <div class="d-flex justify-content-between">
+                    <strong>{{ reply.created_by.get_full_name|default:reply.created_by.username|default:"Système" }}</strong>
+                    <span class="text-muted small">{{ reply.created_at|date:"d/m/Y H:i" }}</span>
+                </div>
+                <div class="mt-2" style="white-space: pre-wrap;">{{ reply.body }}</div>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endif %}
 
 <a href="{% url 'manage_messages' %}" class="btn btn-outline-secondary mt-3">
     <i class="bi bi-arrow-left"></i> Retour aux messages

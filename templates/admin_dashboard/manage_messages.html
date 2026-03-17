@@ -45,13 +45,23 @@
     </div>
     <div class="col-md-3">
         <label class="form-label">Statut</label>
-        <select name="read" class="form-select">
-            <option value="" {% if not request.GET.read %}selected{% endif %}>Tous</option>
-            <option value="unread" {% if request.GET.read == 'unread' %}selected{% endif %}>Non lus</option>
-            <option value="read" {% if request.GET.read == 'read' %}selected{% endif %}>Lus</option>
+        <select name="status" class="form-select">
+            <option value="" {% if not request.GET.status %}selected{% endif %}>Tous</option>
+            <option value="new" {% if request.GET.status == 'new' %}selected{% endif %}>Nouveaux</option>
+            <option value="read" {% if request.GET.status == 'read' %}selected{% endif %}>Lus</option>
+            <option value="responded" {% if request.GET.status == 'responded' %}selected{% endif %}>Répondus</option>
+            <option value="archived" {% if request.GET.status == 'archived' %}selected{% endif %}>Archivés</option>
         </select>
     </div>
-    <div class="col-md-3 d-flex gap-2">
+    <div class="col-md-3">
+        <label class="form-label">Assignation</label>
+        <select name="assigned" class="form-select">
+            <option value="" {% if not request.GET.assigned %}selected{% endif %}>Toutes</option>
+            <option value="me" {% if request.GET.assigned == 'me' %}selected{% endif %}>Mes messages</option>
+            <option value="unassigned" {% if request.GET.assigned == 'unassigned' %}selected{% endif %}>Non assignés</option>
+        </select>
+    </div>
+    <div class="col-md-12 d-flex gap-2">
         <button type="submit" class="btn btn-church w-100">Filtrer</button>
         <a href="{% url 'manage_messages' %}" class="btn btn-outline-secondary w-100">Réinitialiser</a>
     </div>
@@ -65,24 +75,38 @@
                     <tr>
                         <th>Expéditeur</th>
                         <th>Sujet</th>
+                        <th>Statut</th>
+                        <th>Assigné à</th>
                         <th>Date</th>
-                        <th>Lu</th>
                         <th class="text-end">Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for msg in contact_messages %}
-                    <tr class="{% if not msg.is_read %}fw-bold{% endif %}">
+                    <tr class="{% if msg.status == 'new' %}fw-bold{% endif %}">
                         <td>{{ msg.sender_name }}</td>
                         <td>{{ msg.subject|default:"Sans sujet" }}</td>
-                        <td>{{ msg.created_at|date:"d/m/Y H:i" }}</td>
                         <td>
-                            {% if msg.is_read %}
+                            {% if msg.status == 'new' %}
+                                <span class="badge bg-warning text-dark">Nouveau</span>
+                            {% elif msg.status == 'read' %}
                                 <span class="badge bg-success">Lu</span>
+                            {% elif msg.status == 'responded' %}
+                                <span class="badge bg-primary">Répondu</span>
+                            {% elif msg.status == 'archived' %}
+                                <span class="badge bg-secondary">Archivé</span>
                             {% else %}
-                                <span class="badge bg-warning text-dark">Non lu</span>
+                                <span class="badge bg-light text-dark">Inconnu</span>
                             {% endif %}
                         </td>
+                        <td>
+                            {% if msg.assigned_to %}
+                                {{ msg.assigned_to.get_full_name|default:msg.assigned_to.username }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>{{ msg.created_at|date:"d/m/Y H:i" }}</td>
                         <td class="text-end">
                             <a href="{% url 'read_message' msg.pk %}" class="btn btn-sm btn-outline-primary">
                                 <i class="bi bi-eye"></i> Voir
@@ -91,7 +115,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="text-center text-muted py-4">Aucun message reçu</td>
+                        <td colspan="6" class="text-center text-muted py-4">Aucun message reçu</td>
                     </tr>
                     {% endfor %}
                 </tbody>

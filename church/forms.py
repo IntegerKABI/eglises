@@ -15,7 +15,18 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 
-from .models import Church, ChurchInvitation, ChurchMembership, Event, Sermon, Member, Page, ContactMessage, SiteSettings
+from .models import (
+    Church,
+    ChurchInvitation,
+    ChurchMembership,
+    Event,
+    Sermon,
+    Member,
+    Page,
+    ContactMessage,
+    ContactMessageReply,
+    SiteSettings,
+)
 
 
 class ChurchForm(forms.ModelForm):
@@ -119,6 +130,15 @@ class SiteSettingsForm(forms.ModelForm):
         fields = ['site_name', 'site_slogan', 'site_description', 'site_logo', 'cover_image', 'contact_email']
         widgets = {
             'site_description': forms.Textarea(attrs={'rows': 3}),
+        }
+
+
+class ContactMessageReplyForm(forms.ModelForm):
+    class Meta:
+        model = ContactMessageReply
+        fields = ['body']
+        widgets = {
+            'body': forms.Textarea(attrs={'rows': 4, 'class': 'form-control'}),
         }
 
 

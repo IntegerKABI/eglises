@@ -50,6 +50,7 @@ from .forms import (
     MemberForm,
     PageForm,
     ContactForm,
+    ContactMessageReplyForm,
     ChurchUserCreateForm,
     ChurchMembershipAssignForm,
     ChurchMembershipUpdateForm,
@@ -495,8 +496,8 @@ def dashboard(request):
             is_active=True,
             event_date__gte=timezone.now().date()
         )[:5],
-        'recent_messages': church.messages.filter(is_read=False)[:5],
-        'unread_messages_count': church.messages.filter(is_read=False).count(),
+        'recent_messages': church.messages.filter(status=ContactMessage.Status.NEW)[:5],
+        'unread_messages_count': church.messages.filter(status=ContactMessage.Status.NEW).count(),
     }
     return render(request, 'admin_dashboard/dashboard.html', context)
 
@@ -1125,7 +1126,7 @@ def manage_messages(request):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
-    contact_messages = church.messages.all()
+    contact_messages = church.messages.select_related('assigned_to')
     q = _get_text_param(request, 'q', 200)
     if q:
         contact_messages = contact_messages.filter(
@@ -1134,11 +1135,14 @@ def manage_messages(request):
             Q(subject__icontains=q) |
             Q(message__icontains=q)
         )
-    read = _get_choice_param(request, 'read', {'read', 'unread'})
-    if read == 'read':
-        contact_messages = contact_messages.filter(is_read=True)
-    elif read == 'unread':
-        contact_messages = contact_messages.filter(is_read=False)
+    status = _get_choice_param(request, 'status', {c for c, _ in ContactMessage.Status.choices})
+    if status:
+        contact_messages = contact_messages.filter(status=status)
+    assigned = _get_choice_param(request, 'assigned', {'me', 'unassigned'})
+    if assigned == 'me':
+        contact_messages = contact_messages.filter(assigned_to=request.user)
+    elif assigned == 'unassigned':
+        contact_messages = contact_messages.filter(assigned_to__isnull=True)
     paginator = Paginator(contact_messages, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
     return render(request, 'admin_dashboard/manage_messages.html', {
@@ -1155,18 +1159,71 @@ def read_message(request, pk):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
-    msg = get_object_or_404(ContactMessage, pk=pk, church=church)
+    msg = get_object_or_404(
+        ContactMessage.objects.select_related('assigned_to', 'responded_by'),
+        pk=pk,
+        church=church,
+    )
+    reply_form = ContactMessageReplyForm()
     if request.method == 'POST':
-        if not msg.is_read:
-            msg.is_read = True
-            msg.save(update_fields=['is_read'])
-        if is_ajax(request):
-            return JsonResponse({'success': True, 'message': 'Message marquÃ© comme lu.'})
-        messages.success(request, 'Message marquÃ© comme lu.')
-        return redirect('read_message', pk=pk)
+        action = request.POST.get('action')
+        if action == 'mark_read':
+            if msg.status == ContactMessage.Status.NEW:
+                msg.status = ContactMessage.Status.READ
+                msg.save(update_fields=['status', 'is_read'])
+            if is_ajax(request):
+                return JsonResponse({'success': True, 'message': 'Message marquÃ© comme lu.'})
+            messages.success(request, 'Message marquÃ© comme lu.')
+            return redirect('read_message', pk=pk)
+        if action == 'archive':
+            msg.status = ContactMessage.Status.ARCHIVED
+            msg.archived_at = timezone.now()
+            msg.save(update_fields=['status', 'archived_at', 'is_read'])
+            if is_ajax(request):
+                return JsonResponse({'success': True, 'message': 'Message archivÃ©.'})
+            messages.success(request, 'Message archivÃ©.')
+            return redirect('read_message', pk=pk)
+        if action == 'assign_me':
+            msg.assigned_to = request.user
+            msg.save(update_fields=['assigned_to'])
+            if is_ajax(request):
+                return JsonResponse({'success': True, 'message': 'Message assignÃ©.'})
+            messages.success(request, 'Message assignÃ©.')
+            return redirect('read_message', pk=pk)
+        if action == 'unassign':
+            msg.assigned_to = None
+            msg.save(update_fields=['assigned_to'])
+            if is_ajax(request):
+                return JsonResponse({'success': True, 'message': 'Assignation retirÃ©e.'})
+            messages.success(request, "Assignation retirÃ©e.")
+            return redirect('read_message', pk=pk)
+        if action == 'respond':
+            reply_form = ContactMessageReplyForm(request.POST)
+            if reply_form.is_valid():
+                reply = reply_form.save(commit=False)
+                reply.message = msg
+                reply.created_by = request.user
+                reply.save()
+                msg.status = ContactMessage.Status.RESPONDED
+                msg.responded_at = timezone.now()
+                msg.responded_by = request.user
+                msg.save(update_fields=['status', 'responded_at', 'responded_by', 'is_read'])
+                if is_ajax(request):
+                    return JsonResponse({'success': True, 'message': 'RÃ©ponse enregistrÃ©e.'})
+                messages.success(request, 'RÃ©ponse enregistrÃ©e.')
+                return redirect('read_message', pk=pk)
+            if is_ajax(request):
+                return JsonResponse({'success': False, 'errors': reply_form.errors}, status=400)
+        else:
+            if is_ajax(request):
+                return JsonResponse({'success': False, 'message': 'Action invalide.'}, status=400)
+            messages.error(request, "Action invalide.")
+            return redirect('read_message', pk=pk)
     return render(request, 'admin_dashboard/read_message.html', {
         'church': church,
         'msg': msg,
+        'reply_form': reply_form,
+        'replies': msg.replies.select_related('created_by'),
     })
 
 

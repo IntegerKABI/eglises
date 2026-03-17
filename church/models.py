@@ -613,6 +613,12 @@ class ContactMessage(models.Model):
     """
     MESSAGES DE CONTACT — Reçus via le formulaire du site public.
     """
+    class Status(models.TextChoices):
+        NEW = 'new', 'Nouveau'
+        READ = 'read', 'Lu'
+        RESPONDED = 'responded', 'Répondu'
+        ARCHIVED = 'archived', 'Archivé'
+
     church = models.ForeignKey(
         Church,
         on_delete=models.CASCADE,
@@ -623,6 +629,31 @@ class ContactMessage(models.Model):
     sender_email = models.EmailField(verbose_name="Email")
     subject = models.CharField(max_length=255, blank=True, verbose_name="Sujet")
     message = models.TextField(verbose_name="Message")
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.NEW,
+        db_index=True,
+        verbose_name="Statut",
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_contact_messages',
+        verbose_name="Assigné à",
+    )
+    responded_at = models.DateTimeField(null=True, blank=True, verbose_name="Répondu le")
+    responded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='responded_contact_messages',
+        verbose_name="Répondu par",
+    )
+    archived_at = models.DateTimeField(null=True, blank=True, verbose_name="Archivé le")
     is_read = models.BooleanField(default=False, verbose_name="Lu")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -631,11 +662,51 @@ class ContactMessage(models.Model):
         verbose_name_plural = "Messages de contact"
         ordering = ['-created_at']
         indexes = [
+            models.Index(fields=['church', 'status', 'created_at'], name='cm_ch_stat_cr_idx'),
             models.Index(fields=['church', 'is_read', 'created_at']),
+            models.Index(fields=['assigned_to', 'status'], name='cm_asg_stat_idx'),
         ]
 
     def __str__(self):
         return f"{self.sender_name} — {self.subject}"
+
+    def save(self, *args, **kwargs):
+        if not self.status:
+            self.status = self.Status.READ if self.is_read else self.Status.NEW
+        self.is_read = self.status != self.Status.NEW
+        if self.status == self.Status.ARCHIVED and self.archived_at is None:
+            self.archived_at = timezone.now()
+        super().save(*args, **kwargs)
+
+
+class ContactMessageReply(models.Model):
+    message = models.ForeignKey(
+        ContactMessage,
+        on_delete=models.CASCADE,
+        related_name='replies',
+        verbose_name="Message",
+    )
+    body = models.TextField(verbose_name="Réponse")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='contact_message_replies',
+        verbose_name="Répondu par",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Réponse au message"
+        verbose_name_plural = "Réponses aux messages"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['message', 'created_at'], name='cmr_msg_cr_idx'),
+        ]
+
+    def __str__(self):
+        return f"Réponse {self.pk} - {self.message_id}"
 
 
 class SiteSettings(models.Model):
