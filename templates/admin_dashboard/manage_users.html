@@ -11,6 +11,14 @@
     <a href="{% url 'assign_user' %}" class="btn btn-outline-secondary">
         <i class="bi bi-link-45deg"></i> Assigner un utilisateur existant
     </a>
+    <a href="{% url 'invite_user' %}" class="btn btn-outline-primary">
+        <i class="bi bi-envelope-plus"></i> Inviter par email
+    </a>
+    {% if membership_role == "admin" %}
+    <a href="{% url 'transfer_admin' %}" class="btn btn-outline-danger">
+        <i class="bi bi-shuffle"></i> Transférer admin
+    </a>
+    {% endif %}
 </div>
 
 <form method="get" class="row g-2 align-items-end mb-3">
@@ -74,6 +82,23 @@
                         <a href="{% url 'edit_membership' membership.pk %}" class="btn btn-sm btn-outline-primary">
                             <i class="bi bi-pencil"></i> Modifier
                         </a>
+                        {% if membership.is_active %}
+                        <form method="post" action="{% url 'toggle_membership' membership.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="deactivate">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-person-x"></i> Désactiver
+                            </button>
+                        </form>
+                        {% else %}
+                        <form method="post" action="{% url 'toggle_membership' membership.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="activate">
+                            <button type="submit" class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-person-check"></i> Réactiver
+                            </button>
+                        </form>
+                        {% endif %}
                     </td>
                 </tr>
                 {% empty %}
@@ -87,4 +112,52 @@
 </div>
 
 {% include "partials/pagination.html" %}
+
+{% if pending_invites %}
+<div class="card border-0 shadow-sm mt-4">
+    <div class="card-header bg-white">
+        <strong>Invitations en attente</strong>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Email</th>
+                    <th>Rôle</th>
+                    <th>Créée</th>
+                    <th>Expire</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for invite in pending_invites %}
+                <tr>
+                    <td>{{ invite.email }}</td>
+                    <td>{{ invite.get_role_display }}</td>
+                    <td>{{ invite.created_at|date:"d/m/Y H:i" }}</td>
+                    <td>{{ invite.expires_at|date:"d/m/Y H:i" }}</td>
+                    <td class="text-end">
+                        <a href="{% url 'accept_invite' invite.token %}" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-link-45deg"></i> Lien
+                        </a>
+                        <form method="post" action="{% url 'resend_invite' invite.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-send"></i> Renvoyer
+                            </button>
+                        </form>
+                        <form method="post" action="{% url 'revoke_invite' invite.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-x-circle"></i> Révoquer
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

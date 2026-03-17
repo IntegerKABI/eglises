@@ -26,6 +26,7 @@ urlpatterns = [
     path('eglise/<slug:church_slug>/predications/', views.church_sermons, name='church_sermons'),
     path('eglise/<slug:church_slug>/contact/', views.church_contact, name='church_contact'),
     path('eglise/<slug:church_slug>/page/<slug:page_slug>/', views.church_page, name='church_page'),
+    path('invite/<uuid:token>/', views.accept_invite, name='accept_invite'),
 
     # === DASHBOARD (administration) ===
     path('dashboard/', views.dashboard, name='dashboard'),
@@ -64,7 +65,12 @@ urlpatterns = [
     path('dashboard/utilisateurs/', views.manage_users, name='manage_users'),
     path('dashboard/utilisateurs/ajouter/', views.add_user, name='add_user'),
     path('dashboard/utilisateurs/assigner/', views.assign_user, name='assign_user'),
+    path('dashboard/utilisateurs/inviter/', views.invite_user, name='invite_user'),
+    path('dashboard/utilisateurs/transferer/', views.transfer_admin, name='transfer_admin'),
     path('dashboard/utilisateurs/<int:pk>/modifier/', views.edit_membership, name='edit_membership'),
+    path('dashboard/utilisateurs/<int:pk>/toggle/', views.toggle_membership, name='toggle_membership'),
+    path('dashboard/invitations/<int:pk>/revoquer/', views.revoke_invite, name='revoke_invite'),
+    path('dashboard/invitations/<int:pk>/renvoyer/', views.resend_invite, name='resend_invite'),
 
     # Paramètres globaux (super-admin)
     path('dashboard/site/', views.site_settings, name='site_settings'),

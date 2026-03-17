@@ -15,12 +15,14 @@ ARCHITECTURE :
 """
 
 import os
+from datetime import timedelta
 from uuid import uuid4
 
 from django.conf import settings
 from django.db import models
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from django.utils.html import strip_tags
 from django.utils.text import slugify
 
@@ -75,6 +77,10 @@ def upload_page_image(instance, filename):
 
 def upload_site_asset(instance, filename):
     return f"site/{_uuid_filename(filename)}"
+
+
+def _default_invite_expiry():
+    return timezone.now() + timedelta(days=7)
 
 
 class Church(models.Model):
@@ -230,6 +236,70 @@ class ChurchMembership(models.Model):
 
     def __str__(self):
         return f"{self.user} — {self.church} ({self.get_role_display()})"
+
+
+class ChurchInvitation(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'En attente'
+        ACCEPTED = 'accepted', 'Acceptée'
+        REVOKED = 'revoked', 'Révoquée'
+        EXPIRED = 'expired', 'Expirée'
+
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name='invitations',
+        verbose_name="Église",
+    )
+    email = models.EmailField(verbose_name="Email")
+    role = models.CharField(
+        max_length=20,
+        choices=ChurchMembership.Role.choices,
+        default=ChurchMembership.Role.STAFF,
+        verbose_name="Rôle",
+    )
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sent_church_invitations',
+        verbose_name="Invité par",
+    )
+    token = models.UUIDField(default=uuid4, unique=True, editable=False)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+        verbose_name="Statut",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(default=_default_invite_expiry)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    accepted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='accepted_church_invitations',
+        verbose_name="Acceptée par",
+    )
+
+    class Meta:
+        verbose_name = "Invitation d'église"
+        verbose_name_plural = "Invitations d'église"
+        indexes = [
+            models.Index(fields=['church', 'status'], name='ch_inv_ch_status_idx'),
+            models.Index(fields=['email', 'status'], name='ch_inv_email_status_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.email} — {self.church} ({self.get_role_display()})"
+
+    @property
+    def is_expired(self):
+        return self.expires_at and timezone.now() >= self.expires_at
 
 
 class Event(models.Model):

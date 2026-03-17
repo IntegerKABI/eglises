@@ -12,9 +12,10 @@ On les personnalise ici pour :
 
 from django import forms
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 
-from .models import Church, ChurchMembership, Event, Sermon, Member, Page, ContactMessage, SiteSettings
+from .models import Church, ChurchInvitation, ChurchMembership, Event, Sermon, Member, Page, ContactMessage, SiteSettings
 
 
 class ChurchForm(forms.ModelForm):
@@ -170,14 +171,22 @@ class ChurchMembershipAssignForm(forms.Form):
             user = User.objects.filter(email__iexact=identifier).first()
         if not user:
             raise ValidationError("Aucun utilisateur trouvé avec cet identifiant.")
-        if self.church and ChurchMembership.objects.filter(user=user, church=self.church).exists():
-            raise ValidationError("Cet utilisateur est déjà membre de cette église.")
+        if self.church:
+            existing = ChurchMembership.objects.filter(user=user, church=self.church).first()
+            if existing and existing.is_active:
+                raise ValidationError("Cet utilisateur est déjà membre actif de cette église.")
         self.user = user
         return cleaned_data
 
     def save(self, church):
         if not self.user:
             raise ValidationError("Utilisateur introuvable.")
+        membership = ChurchMembership.objects.filter(user=self.user, church=church).first()
+        if membership:
+            membership.role = self.cleaned_data['role']
+            membership.is_active = True
+            membership.save(update_fields=['role', 'is_active'])
+            return membership
         return ChurchMembership.objects.create(
             user=self.user,
             church=church,
@@ -190,3 +199,118 @@ class ChurchMembershipUpdateForm(forms.ModelForm):
     class Meta:
         model = ChurchMembership
         fields = ['role', 'is_active']
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if not self.instance or not self.instance.pk:
+            return cleaned_data
+        new_role = cleaned_data.get('role')
+        new_active = cleaned_data.get('is_active')
+        if (
+            self.instance.role == ChurchMembership.Role.ADMIN
+            and (new_role != ChurchMembership.Role.ADMIN or not new_active)
+        ):
+            other_admins = ChurchMembership.objects.filter(
+                church=self.instance.church,
+                role=ChurchMembership.Role.ADMIN,
+                is_active=True,
+            ).exclude(pk=self.instance.pk)
+            if not other_admins.exists():
+                raise ValidationError("Au moins un administrateur actif est requis.")
+        return cleaned_data
+
+
+class ChurchInvitationForm(forms.ModelForm):
+    class Meta:
+        model = ChurchInvitation
+        fields = ['email', 'role']
+
+    def __init__(self, *args, church=None, invited_by=None, **kwargs):
+        self.church = church
+        self.invited_by = invited_by
+        super().__init__(*args, **kwargs)
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email', '').strip().lower()
+        if not email:
+            return email
+        if self.church:
+            if ChurchMembership.objects.filter(church=self.church, user__email__iexact=email, is_active=True).exists():
+                raise ValidationError("Cet utilisateur est déjà membre actif de cette église.")
+            if ChurchInvitation.objects.filter(
+                church=self.church,
+                email__iexact=email,
+                status=ChurchInvitation.Status.PENDING,
+            ).exists():
+                raise ValidationError("Une invitation en attente existe déjà pour cet email.")
+        return email
+
+    def save(self, commit=True):
+        invite = super().save(commit=False)
+        if self.church:
+            invite.church = self.church
+        if self.invited_by:
+            invite.invited_by = self.invited_by
+        if commit:
+            invite.save()
+        return invite
+
+
+class TransferAdminForm(forms.Form):
+    membership = forms.ModelChoiceField(
+        queryset=ChurchMembership.objects.none(),
+        label="Nouvel administrateur",
+    )
+
+    def __init__(self, *args, church=None, current_membership=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        queryset = ChurchMembership.objects.filter(church=church, is_active=True)
+        if current_membership:
+            queryset = queryset.exclude(pk=current_membership.pk)
+        self.fields['membership'].queryset = queryset.select_related('user')
+
+
+class InviteSignupForm(forms.ModelForm):
+    password1 = forms.CharField(label="Mot de passe", widget=forms.PasswordInput)
+    password2 = forms.CharField(label="Confirmer le mot de passe", widget=forms.PasswordInput)
+
+    class Meta:
+        model = get_user_model()
+        fields = ['username', 'first_name', 'last_name']
+
+    def __init__(self, *args, email=None, **kwargs):
+        self.invite_email = (email or '').strip().lower()
+        super().__init__(*args, **kwargs)
+
+    def clean_username(self):
+        username = self.cleaned_data.get('username')
+        if not username:
+            return username
+        User = get_user_model()
+        if User.objects.filter(username=username).exists():
+            raise ValidationError("Ce nom d'utilisateur est déjà utilisé.")
+        return username
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password1 = cleaned_data.get('password1')
+        password2 = cleaned_data.get('password2')
+        if password1 and password2 and password1 != password2:
+            self.add_error('password2', "Les mots de passe ne correspondent pas.")
+        if password1:
+            try:
+                validate_password(password1, self.instance)
+            except ValidationError as exc:
+                self.add_error('password1', exc)
+        User = get_user_model()
+        if self.invite_email and User.objects.filter(email__iexact=self.invite_email).exists():
+            raise ValidationError("Un compte existe déjà avec cet email. Connectez-vous.")
+        return cleaned_data
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.email = self.invite_email
+        user.set_password(self.cleaned_data['password1'])
+        if commit:
+            user.save()
+        return user

@@ -18,15 +18,20 @@ Il y a 2 sections :
 """
 
 from django.shortcuts import render, get_object_or_404, redirect
+from datetime import timedelta
+from django.conf import settings
+from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse, Http404
+from django.core.mail import send_mail
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Church, ChurchMembership, Event, Sermon, Member, Page, ContactMessage, SiteSettings
+from .models import Church, ChurchInvitation, ChurchMembership, Event, Sermon, Member, Page, ContactMessage, SiteSettings
 from .forms import (
     ChurchForm,
     EventForm,
@@ -37,6 +42,9 @@ from .forms import (
     ChurchUserCreateForm,
     ChurchMembershipAssignForm,
     ChurchMembershipUpdateForm,
+    ChurchInvitationForm,
+    InviteSignupForm,
+    TransferAdminForm,
     SiteSettingsForm,
 )
 from .permissions import (
@@ -81,6 +89,39 @@ def _get_text_param(request, key, max_len=200):
 def _get_choice_param(request, key, allowed):
     value = request.GET.get(key)
     return value if value in allowed else ''
+
+
+def _has_other_admins(church, exclude_membership=None):
+    admins = ChurchMembership.objects.filter(
+        church=church,
+        role=ChurchMembership.Role.ADMIN,
+        is_active=True,
+    )
+    if exclude_membership:
+        admins = admins.exclude(pk=exclude_membership.pk)
+    return admins.exists()
+
+
+def _build_invite_url(request, invite):
+    return request.build_absolute_uri(reverse('accept_invite', args=[invite.token]))
+
+
+def _send_invite_email(request, invite):
+    invite_url = _build_invite_url(request, invite)
+    subject = f"Invitation à rejoindre {invite.church.name}"
+    message = (
+        f"Bonjour,\n\n"
+        f"Vous avez été invité à rejoindre {invite.church.name} en tant que {invite.get_role_display()}.\n"
+        f"Pour accepter l'invitation, cliquez ici : {invite_url}\n\n"
+        f"Cette invitation expirera le {invite.expires_at:%d/%m/%Y %H:%M}.\n"
+    )
+    send_mail(
+        subject,
+        message,
+        settings.DEFAULT_FROM_EMAIL or settings.EMAIL_HOST_USER,
+        [invite.email],
+        fail_silently=False,
+    )
 
 
 def _require_church(request):
@@ -316,6 +357,73 @@ def church_contact(request, church_slug):
     return render(request, 'church/contact.html', {
         'church': church,
         'form': form,
+    })
+
+
+def accept_invite(request, token):
+    invite = get_object_or_404(ChurchInvitation, token=token)
+    if invite.status != ChurchInvitation.Status.PENDING:
+        messages.info(request, "Cette invitation n'est plus disponible.")
+        return redirect('dashboard')
+    if invite.church.status in {Church.Status.SUSPENDED, Church.Status.ARCHIVED}:
+        messages.error(request, "Cette église n'accepte pas de nouvelles invitations.")
+        return redirect('dashboard')
+    if invite.is_expired:
+        invite.status = ChurchInvitation.Status.EXPIRED
+        invite.save(update_fields=['status'])
+        messages.error(request, "Cette invitation a expiré.")
+        return redirect('dashboard')
+
+    if not request.user.is_authenticated:
+        form = InviteSignupForm(request.POST or None, email=invite.email)
+        if request.method == 'POST' and form.is_valid():
+            user = form.save()
+            login(request, user)
+            request.user = user
+        else:
+            return render(request, 'church/accept_invite_signup.html', {
+                'invite': invite,
+                'church': invite.church,
+                'form': form,
+            })
+
+    user_email = (request.user.email or '').strip().lower()
+    if not user_email or user_email != invite.email.lower():
+        messages.error(request, "Cette invitation ne correspond pas à votre email.")
+        return redirect('dashboard')
+
+    if request.method == 'POST':
+        with transaction.atomic():
+            membership = (
+                ChurchMembership.objects.select_for_update()
+                .filter(user=request.user, church=invite.church)
+                .first()
+            )
+            if membership:
+                new_role = invite.role
+                if membership.role == ChurchMembership.Role.ADMIN and invite.role != ChurchMembership.Role.ADMIN:
+                    new_role = membership.role
+                if membership.role != new_role:
+                    membership.role = new_role
+                membership.is_active = True
+                membership.save(update_fields=['role', 'is_active'])
+            else:
+                ChurchMembership.objects.create(
+                    user=request.user,
+                    church=invite.church,
+                    role=invite.role,
+                    is_active=True,
+                )
+            invite.status = ChurchInvitation.Status.ACCEPTED
+            invite.accepted_at = timezone.now()
+            invite.accepted_by = request.user
+            invite.save(update_fields=['status', 'accepted_at', 'accepted_by'])
+        messages.success(request, "Invitation acceptée. Bienvenue !")
+        return redirect('dashboard')
+
+    return render(request, 'church/accept_invite.html', {
+        'invite': invite,
+        'church': invite.church,
     })
 
 
@@ -730,7 +838,16 @@ def manage_users(request):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
+    ChurchInvitation.objects.filter(
+        church=church,
+        status=ChurchInvitation.Status.PENDING,
+        expires_at__lt=timezone.now(),
+    ).update(status=ChurchInvitation.Status.EXPIRED)
     memberships = ChurchMembership.objects.filter(church=church).select_related('user')
+    pending_invites = ChurchInvitation.objects.filter(
+        church=church,
+        status=ChurchInvitation.Status.PENDING,
+    ).order_by('-created_at')
     q = _get_text_param(request, 'q', 100)
     if q:
         memberships = memberships.filter(
@@ -753,6 +870,7 @@ def manage_users(request):
         'church': church,
         'memberships': page_obj,
         'page_obj': page_obj,
+        'pending_invites': pending_invites,
         'querystring': _querystring_without_page(request),
     })
 
@@ -813,6 +931,138 @@ def assign_user(request):
 
 @login_required
 @require_church_roles(*ADMIN_ONLY)
+def invite_user(request):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+
+    if request.method == 'POST':
+        form = ChurchInvitationForm(request.POST, church=church, invited_by=request.user)
+        if form.is_valid():
+            invite = form.save()
+            email_error = False
+            try:
+                _send_invite_email(request, invite)
+            except Exception:
+                email_error = True
+                messages.error(request, "Invitation créée, mais l'email n'a pas pu être envoyé.")
+            if is_ajax(request):
+                message = "Invitation envoyée." if not email_error else "Invitation créée, email non envoyé."
+                return JsonResponse({'success': True, 'message': message, 'redirect': reverse('manage_users')})
+            if not email_error:
+                messages.success(request, "Invitation envoyée.")
+            return redirect('manage_users')
+        if is_ajax(request):
+            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+    else:
+        form = ChurchInvitationForm(church=church, invited_by=request.user)
+
+    return render(request, 'admin_dashboard/invite_user.html', {
+        'church': church,
+        'form': form,
+        'title': "Inviter un utilisateur",
+    })
+
+
+@login_required
+@require_church_roles(*ADMIN_ONLY)
+def revoke_invite(request, pk):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+    invite = get_object_or_404(ChurchInvitation, pk=pk, church=church)
+    if request.method == 'POST' and invite.status == ChurchInvitation.Status.PENDING:
+        invite.status = ChurchInvitation.Status.REVOKED
+        invite.save(update_fields=['status'])
+        messages.success(request, "Invitation révoquée.")
+    return redirect('manage_users')
+
+
+@login_required
+@require_church_roles(*ADMIN_ONLY)
+def resend_invite(request, pk):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+    invite = get_object_or_404(ChurchInvitation, pk=pk, church=church)
+    if request.method == 'POST' and invite.status == ChurchInvitation.Status.PENDING:
+        invite.expires_at = timezone.now() + timedelta(days=7)
+        invite.save(update_fields=['expires_at'])
+        try:
+            _send_invite_email(request, invite)
+            messages.success(request, "Invitation renvoyée.")
+        except Exception:
+            messages.error(request, "Impossible d'envoyer l'email pour le moment.")
+    return redirect('manage_users')
+
+
+@login_required
+@require_church_roles(*ADMIN_ONLY)
+def toggle_membership(request, pk):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+    membership = get_object_or_404(ChurchMembership, pk=pk, church=church)
+    if request.method != 'POST':
+        return redirect('manage_users')
+    action = request.POST.get('action')
+    if action not in {'activate', 'deactivate'}:
+        messages.error(request, "Action invalide.")
+        return redirect('manage_users')
+    if action == 'deactivate' and membership.is_active:
+        if membership.role == ChurchMembership.Role.ADMIN and not _has_other_admins(church, exclude_membership=membership):
+            messages.error(request, "Au moins un administrateur actif est requis.")
+            return redirect('manage_users')
+        membership.is_active = False
+    elif action == 'activate':
+        membership.is_active = True
+    membership.save(update_fields=['is_active'])
+    messages.success(request, "Statut utilisateur mis à jour.")
+    return redirect('manage_users')
+
+
+@login_required
+@require_church_roles(*ADMIN_ONLY)
+def transfer_admin(request):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+
+    current_membership = get_membership(request.user, church)
+    if not current_membership or current_membership.role != ChurchMembership.Role.ADMIN or not current_membership.is_active:
+        messages.error(request, "Transfert réservé aux administrateurs actifs.")
+        return redirect('manage_users')
+
+    form = TransferAdminForm(
+        request.POST or None,
+        church=church,
+        current_membership=current_membership,
+    )
+    if not form.fields['membership'].queryset.exists():
+        messages.error(request, "Aucun autre membre actif disponible pour le transfert.")
+        return redirect('manage_users')
+
+    if request.method == 'POST' and form.is_valid():
+        target = form.cleaned_data['membership']
+        with transaction.atomic():
+            target.role = ChurchMembership.Role.ADMIN
+            target.is_active = True
+            target.save(update_fields=['role', 'is_active'])
+            if current_membership.pk != target.pk:
+                current_membership.role = ChurchMembership.Role.STAFF
+                current_membership.save(update_fields=['role'])
+        messages.success(request, "Administrateur transféré.")
+        return redirect('manage_users')
+
+    return render(request, 'admin_dashboard/transfer_admin.html', {
+        'church': church,
+        'form': form,
+        'title': "Transférer l'administration",
+    })
+
+
+@login_required
+@require_church_roles(*ADMIN_ONLY)
 def edit_membership(request, pk):
     church = _require_church(request)
     if not church:
@@ -822,27 +1072,6 @@ def edit_membership(request, pk):
     if request.method == 'POST':
         form = ChurchMembershipUpdateForm(request.POST, instance=membership)
         if form.is_valid():
-            new_role = form.cleaned_data['role']
-            new_active = form.cleaned_data['is_active']
-            if (
-                membership.role == ChurchMembership.Role.ADMIN
-                and (new_role != ChurchMembership.Role.ADMIN or not new_active)
-            ):
-                other_admins = ChurchMembership.objects.filter(
-                    church=church,
-                    role=ChurchMembership.Role.ADMIN,
-                    is_active=True,
-                ).exclude(pk=membership.pk)
-                if not other_admins.exists():
-                    form.add_error('role', "Au moins un administrateur actif est requis.")
-                    if is_ajax(request):
-                        return JsonResponse({'success': False, 'errors': form.errors}, status=400)
-                    return render(request, 'admin_dashboard/membership_form.html', {
-                        'church': church,
-                        'form': form,
-                        'title': "Modifier un utilisateur",
-                        'membership': membership,
-                    })
             form.save()
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': 'Rôle mis à jour !', 'redirect': reverse('manage_users')})
