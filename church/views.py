@@ -80,6 +80,7 @@ from .notifications import (
     notify_user,
     notify_user_role_change,
 )
+from .audit import log_audit
 from .tenancy import get_accessible_churches, get_membership, get_selected_church
 
 
@@ -227,6 +228,17 @@ def _handle_church_form(
             obj.save()
             if hasattr(form, 'save_m2m'):
                 form.save_m2m()
+            try:
+                action = "create" if is_created else "update"
+                log_audit(
+                    actor=request.user,
+                    church=church if hasattr(obj, 'church_id') else None,
+                    action=action,
+                    instance=obj,
+                    metadata={"form": form.__class__.__name__},
+                )
+            except Exception:
+                pass
             if after_save:
                 after_save(obj, is_created)
             if is_ajax(request):
@@ -260,6 +272,15 @@ def _handle_church_delete(request, model, pk, success_message, success_url_name,
     if request.method == 'POST':
         if after_delete:
             after_delete(obj)
+        try:
+            log_audit(
+                actor=request.user,
+                church=church,
+                action="delete",
+                instance=obj,
+            )
+        except Exception:
+            pass
         obj.delete()
         if is_ajax(request):
             return JsonResponse({'success': True, 'message': success_message})
@@ -469,6 +490,16 @@ def accept_invite(request, token):
             invite.accepted_at = timezone.now()
             invite.accepted_by = request.user
             invite.save(update_fields=['status', 'accepted_at', 'accepted_by'])
+        try:
+            log_audit(
+                actor=request.user,
+                church=invite.church,
+                action="invite_accept",
+                instance=invite,
+                metadata={"email": invite.email, "role": invite.role},
+            )
+        except Exception:
+            pass
         notify_church_admins(
             invite.church,
             category="invite",
@@ -565,6 +596,16 @@ def church_settings(request):
         form = ChurchForm(request.POST, request.FILES, instance=church)
         if form.is_valid():
             form.save()
+            try:
+                log_audit(
+                    actor=request.user,
+                    church=church,
+                    action="settings_update",
+                    instance=church,
+                    metadata={"section": "church_settings"},
+                )
+            except Exception:
+                pass
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': 'Paramètres mis à jour avec succès !'})
             messages.success(request, 'Paramètres mis à jour avec succès !')
@@ -1003,6 +1044,18 @@ def add_user(request):
         form = ChurchUserCreateForm(request.POST)
         if form.is_valid():
             user = form.save(church=church)
+            try:
+                log_audit(
+                    actor=request.user,
+                    church=church,
+                    action="membership_create",
+                    object_type="ChurchMembership",
+                    object_id=str(user.pk),
+                    object_repr=str(user),
+                    metadata={"role": form.cleaned_data['role']},
+                )
+            except Exception:
+                pass
             notify_user_role_change(
                 church,
                 user,
@@ -1039,6 +1092,16 @@ def assign_user(request):
         if form.is_valid():
             membership = form.save(church=church)
             action_title = "Accès accordé" if getattr(form, 'created', False) else "Rôle mis à jour"
+            try:
+                log_audit(
+                    actor=request.user,
+                    church=church,
+                    action="membership_assign" if getattr(form, 'created', False) else "membership_update",
+                    instance=membership,
+                    metadata={"role": membership.role},
+                )
+            except Exception:
+                pass
             notify_user_role_change(
                 church,
                 membership.user,
@@ -1074,6 +1137,16 @@ def invite_user(request):
         form = ChurchInvitationForm(request.POST, church=church, invited_by=request.user)
         if form.is_valid():
             invite = form.save()
+            try:
+                log_audit(
+                    actor=request.user,
+                    church=church,
+                    action="invite_create",
+                    instance=invite,
+                    metadata={"email": invite.email, "role": invite.role},
+                )
+            except Exception:
+                pass
             notify_church_admins(
                 church,
                 category="invite",
@@ -1127,6 +1200,16 @@ def revoke_invite(request, pk):
     if request.method == 'POST' and invite.status == ChurchInvitation.Status.PENDING:
         invite.status = ChurchInvitation.Status.REVOKED
         invite.save(update_fields=['status'])
+        try:
+            log_audit(
+                actor=request.user,
+                church=church,
+                action="invite_revoke",
+                instance=invite,
+                metadata={"email": invite.email},
+            )
+        except Exception:
+            pass
         invited_user = get_user_model().objects.filter(email__iexact=invite.email).first()
         if invited_user:
             _mark_invite_notifications_read(invited_user, invite)
@@ -1152,6 +1235,16 @@ def resend_invite(request, pk):
     if request.method == 'POST' and invite.status == ChurchInvitation.Status.PENDING:
         invite.expires_at = timezone.now() + timedelta(days=7)
         invite.save(update_fields=['expires_at'])
+        try:
+            log_audit(
+                actor=request.user,
+                church=church,
+                action="invite_resend",
+                instance=invite,
+                metadata={"email": invite.email},
+            )
+        except Exception:
+            pass
         try:
             _send_invite_email(request, invite)
             notify_church_admins(
@@ -1190,6 +1283,16 @@ def toggle_membership(request, pk):
         membership.is_active = True
     membership.save(update_fields=['is_active'])
     status_label = "actif" if membership.is_active else "inactif"
+    try:
+        log_audit(
+            actor=request.user,
+            church=church,
+            action="membership_status",
+            instance=membership,
+            metadata={"active": membership.is_active},
+        )
+    except Exception:
+        pass
     notify_user_role_change(
         church,
         membership.user,
@@ -1232,6 +1335,16 @@ def transfer_admin(request):
             if current_membership.pk != target.pk:
                 current_membership.role = ChurchMembership.Role.STAFF
                 current_membership.save(update_fields=['role'])
+        try:
+            log_audit(
+                actor=request.user,
+                church=church,
+                action="membership_transfer_admin",
+                instance=target,
+                metadata={"from_user": current_membership.user_id},
+            )
+        except Exception:
+            pass
         notify_user_role_change(
             church,
             target.user,
@@ -1275,6 +1388,19 @@ def edit_membership(request, pk):
             form.save()
             if membership.role != old_role or membership.is_active != old_active:
                 status_label = "actif" if membership.is_active else "inactif"
+                try:
+                    log_audit(
+                        actor=request.user,
+                        church=church,
+                        action="membership_update",
+                        instance=membership,
+                        metadata={
+                            "role": membership.role,
+                            "active": membership.is_active,
+                        },
+                    )
+                except Exception:
+                    pass
                 notify_user_role_change(
                     church,
                     membership.user,
@@ -1511,6 +1637,16 @@ def site_settings(request):
         form = SiteSettingsForm(request.POST, request.FILES, instance=settings_obj)
         if form.is_valid():
             form.save()
+            try:
+                log_audit(
+                    actor=request.user,
+                    church=None,
+                    action="settings_update",
+                    instance=settings_obj,
+                    metadata={"section": "site_settings"},
+                )
+            except Exception:
+                pass
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': 'Paramètres de la plateforme mis à jour !'})
             messages.success(request, 'Paramètres de la plateforme mis à jour !')

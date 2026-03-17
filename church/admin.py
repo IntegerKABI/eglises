@@ -23,6 +23,7 @@ from .models import (
     ContactMessage,
     ContactMessageReply,
     Notification,
+    AuditLog,
     SiteSettings,
 )
 
@@ -104,3 +105,10 @@ class NotificationAdmin(admin.ModelAdmin):
     list_display = ['title', 'category', 'church', 'recipient', 'is_read', 'created_at']
     list_filter = ['category', 'church', 'is_read']
     search_fields = ['title', 'body']
+
+
+@admin.register(AuditLog)
+class AuditLogAdmin(admin.ModelAdmin):
+    list_display = ['action', 'object_type', 'object_id', 'church', 'actor', 'created_at']
+    list_filter = ['action', 'object_type', 'church']
+    search_fields = ['object_type', 'object_id', 'object_repr']

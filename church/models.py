@@ -786,6 +786,44 @@ class Notification(models.Model):
         return f"{self.get_category_display()} - {self.title}"
 
 
+class AuditLog(models.Model):
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name='audit_logs',
+        null=True,
+        blank=True,
+        verbose_name="Église",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_logs',
+        verbose_name="Auteur",
+    )
+    action = models.CharField(max_length=50, db_index=True, verbose_name="Action")
+    object_type = models.CharField(max_length=100, db_index=True, verbose_name="Type d'objet")
+    object_id = models.CharField(max_length=64, blank=True, verbose_name="ID objet")
+    object_repr = models.CharField(max_length=255, blank=True, verbose_name="Résumé")
+    metadata = models.JSONField(blank=True, default=dict, verbose_name="Détails")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Journal d'audit"
+        verbose_name_plural = "Journaux d'audit"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['church', 'created_at'], name='audit_ch_cr_idx'),
+            models.Index(fields=['actor', 'created_at'], name='audit_actor_cr_idx'),
+            models.Index(fields=['object_type', 'object_id'], name='audit_obj_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.action} - {self.object_type} ({self.object_id})"
+
+
 class SiteSettings(models.Model):
     """
     PARAMÈTRES GLOBAUX DE LA PLATEFORME (singleton).
