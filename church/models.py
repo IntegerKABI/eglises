@@ -511,6 +511,21 @@ class Member(models.Model):
         blank=True,
         verbose_name="Département/Ministère"
     )
+    directory_consent = models.BooleanField(
+        default=False,
+        verbose_name="Consentement annuaire",
+        help_text="Autorise l'affichage dans l'annuaire public."
+    )
+    directory_consent_source = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Source du consentement",
+    )
+    directory_consent_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Consentement donné le",
+    )
     photo = models.ImageField(
         upload_to=upload_member_photo,
         blank=True,
@@ -528,14 +543,31 @@ class Member(models.Model):
             models.Index(fields=['church', 'is_active']),
             models.Index(fields=['church', 'gender']),
             models.Index(fields=['church', 'last_name', 'first_name']),
+            models.Index(fields=['church', 'directory_consent'], name='member_ch_cons_idx'),
         ]
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
 
+    def clean(self):
+        super().clean()
+        if self.directory_consent and not self.directory_consent_source:
+            raise ValidationError({
+                "directory_consent_source": "Précisez la source du consentement.",
+            })
+
     @property
     def full_name(self):
         return f"{self.first_name} {self.last_name}"
+
+    def save(self, *args, **kwargs):
+        if self.directory_consent:
+            if self.directory_consent_at is None:
+                self.directory_consent_at = timezone.now()
+        else:
+            self.directory_consent_at = None
+            self.directory_consent_source = ""
+        super().save(*args, **kwargs)
 
 
 class Page(models.Model):

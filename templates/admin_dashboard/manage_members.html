@@ -68,7 +68,15 @@
         <label class="form-label">Département</label>
         <input type="text" name="department" value="{{ request.GET.department }}" class="form-control" placeholder="Ministère">
     </div>
-    <div class="col-md-2 d-flex gap-2">
+    <div class="col-md-2">
+        <label class="form-label">Consentement</label>
+        <select name="consent" class="form-select">
+            <option value="" {% if not request.GET.consent %}selected{% endif %}>Tous</option>
+            <option value="yes" {% if request.GET.consent == 'yes' %}selected{% endif %}>Oui</option>
+            <option value="no" {% if request.GET.consent == 'no' %}selected{% endif %}>Non</option>
+        </select>
+    </div>
+    <div class="col-md-12 d-flex gap-2">
         <button type="submit" class="btn btn-church w-100">Filtrer</button>
         <a href="{% url 'manage_members' %}" class="btn btn-outline-secondary w-100">Réinitialiser</a>
     </div>
@@ -84,6 +92,7 @@
                         <th>Téléphone</th>
                         <th>Département</th>
                         <th>Genre</th>
+                        <th>Consentement</th>
                         <th class="text-end">Actions</th>
                     </tr>
                 </thead>
@@ -91,9 +100,16 @@
                     {% for member in members %}
                     <tr>
                         <td>{{ member.full_name }}</td>
-                        <td>{{ member.phone|default:"—" }}</td>
-                        <td>{{ member.department|default:"—" }}</td>
-                        <td>{{ member.get_gender_display|default:"—" }}</td>
+                        <td>{{ member.phone|default:"-" }}</td>
+                        <td>{{ member.department|default:"-" }}</td>
+                        <td>{{ member.get_gender_display|default:"-" }}</td>
+                        <td>
+                            {% if member.directory_consent %}
+                                <span class="badge bg-success">Oui</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Non</span>
+                            {% endif %}
+                        </td>
                         <td class="text-end">
                             <a href="{% url 'edit_member' member.pk %}" class="btn btn-sm btn-outline-primary">
                                 <i class="bi bi-pencil"></i>
@@ -108,7 +124,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="text-center text-muted py-4">Aucun membre enregistré</td>
+                        <td colspan="6" class="text-center text-muted py-4">Aucun membre enregistré</td>
                     </tr>
                     {% endfor %}
                 </tbody>

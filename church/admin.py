@@ -53,8 +53,8 @@ class SermonAdmin(admin.ModelAdmin):
 
 @admin.register(Member)
 class MemberAdmin(admin.ModelAdmin):
-    list_display = ['last_name', 'first_name', 'church', 'phone', 'department', 'is_active']
-    list_filter = ['church', 'gender', 'department', 'is_active']
+    list_display = ['last_name', 'first_name', 'church', 'phone', 'department', 'directory_consent', 'directory_consent_at', 'is_active']
+    list_filter = ['church', 'gender', 'department', 'directory_consent', 'is_active']
     search_fields = ['first_name', 'last_name', 'email', 'phone']
 
 

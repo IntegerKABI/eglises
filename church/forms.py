@@ -94,10 +94,12 @@ class MemberForm(forms.ModelForm):
     class Meta:
         model = Member
         fields = ['first_name', 'last_name', 'email', 'phone', 'address',
-                  'birth_date', 'gender', 'membership_date', 'department', 'photo']
+                  'birth_date', 'gender', 'membership_date', 'department',
+                  'directory_consent', 'directory_consent_source', 'photo']
         widgets = {
             'birth_date': forms.DateInput(attrs={'type': 'date'}),
             'membership_date': forms.DateInput(attrs={'type': 'date'}),
+            'directory_consent_source': forms.TextInput(attrs={'placeholder': 'Formulaire papier, email, oral...'}),
         }
 
 

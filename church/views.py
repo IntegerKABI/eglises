@@ -728,6 +728,11 @@ def manage_members(request):
     department = _get_text_param(request, 'department', 100)
     if department:
         members = members.filter(department__icontains=department)
+    consent = _get_choice_param(request, 'consent', {'yes', 'no'})
+    if consent == 'yes':
+        members = members.filter(directory_consent=True)
+    elif consent == 'no':
+        members = members.filter(directory_consent=False)
     paginator = Paginator(members, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
     return render(request, 'admin_dashboard/manage_members.html', {
