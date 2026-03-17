@@ -1,0 +1,142 @@
+{% extends "admin_dashboard/base_dashboard.html" %}
+{% block title %}Notifications — {{ church.name }}{% endblock %}
+
+{% block dashboard_content %}
+<div class="skeleton-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="skeleton skeleton-title" style="width:200px;"></div>
+        <div class="skeleton skeleton-btn"></div>
+    </div>
+    <div class="card border-0 shadow-sm">
+        <div class="card-body">
+            <table class="table">
+                <thead class="table-light">
+                    <tr>
+                        <th><div class="skeleton skeleton-table-cell" style="width:120px;"></div></th>
+                        <th><div class="skeleton skeleton-table-cell" style="width:200px;"></div></th>
+                        <th><div class="skeleton skeleton-table-cell" style="width:80px;"></div></th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for i in "123" %}
+                    <tr>
+                        <td><div class="skeleton skeleton-text" style="width:90px;"></div></td>
+                        <td><div class="skeleton skeleton-text" style="width:180px;"></div></td>
+                        <td><div class="skeleton skeleton-badge"></div></td>
+                        <td class="text-end"><div class="skeleton skeleton-btn" style="width:70px;"></div></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="page-content">
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-bell"></i> Notifications</h1>
+    <form method="post" action="{% url 'mark_all_notifications_read' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-secondary">
+            <i class="bi bi-check2-all"></i> Tout marquer comme lu
+        </button>
+    </form>
+</div>
+
+<form method="get" class="row g-2 align-items-end mb-4">
+    <div class="col-md-4">
+        <label class="form-label">Statut</label>
+        <select name="status" class="form-select">
+            <option value="" {% if not request.GET.status %}selected{% endif %}>Tous</option>
+            <option value="unread" {% if request.GET.status == 'unread' %}selected{% endif %}>Non lues</option>
+            <option value="read" {% if request.GET.status == 'read' %}selected{% endif %}>Lues</option>
+        </select>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Catégorie</label>
+        <select name="category" class="form-select">
+            <option value="" {% if not request.GET.category %}selected{% endif %}>Toutes</option>
+            <option value="invite" {% if request.GET.category == 'invite' %}selected{% endif %}>Invitations</option>
+            <option value="role" {% if request.GET.category == 'role' %}selected{% endif %}>Rôles</option>
+            <option value="message" {% if request.GET.category == 'message' %}selected{% endif %}>Messages</option>
+            <option value="event" {% if request.GET.category == 'event' %}selected{% endif %}>Événements</option>
+            <option value="sermon" {% if request.GET.category == 'sermon' %}selected{% endif %}>Prédications</option>
+        </select>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Église</label>
+        <select name="church" class="form-select">
+            <option value="" {% if not request.GET.church %}selected{% endif %}>Toutes</option>
+            {% for c in churches %}
+            <option value="{{ c.id }}" {% if request.GET.church == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-12 d-flex gap-2">
+        <button type="submit" class="btn btn-church w-100">Filtrer</button>
+        <a href="{% url 'manage_notifications' %}" class="btn btn-outline-secondary w-100">Réinitialiser</a>
+    </div>
+</form>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Catégorie</th>
+                        <th>Église</th>
+                        <th>Notification</th>
+                        <th>Date</th>
+                        <th>Statut</th>
+                        <th class="text-end">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for notif in notifications %}
+                    <tr class="{% if not notif.is_read %}fw-bold{% endif %}">
+                        <td>{{ notif.get_category_display }}</td>
+                        <td>{{ notif.church.name }}</td>
+                        <td>
+                            <div>{{ notif.title }}</div>
+                            {% if notif.body %}
+                                <small class="text-muted">{{ notif.body }}</small>
+                            {% endif %}
+                            {% if notif.link %}
+                                <div><a href="{{ notif.link }}">Ouvrir</a></div>
+                            {% endif %}
+                        </td>
+                        <td>{{ notif.created_at|date:"d/m/Y H:i" }}</td>
+                        <td>
+                            {% if notif.is_read %}
+                                <span class="badge bg-success">Lu</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">Non lu</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if not notif.is_read %}
+                            <form method="post" action="{% url 'mark_notification_read' notif.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-check-lg"></i> Marquer lu
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">Aucune notification</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% include "partials/pagination.html" %}
+</div>
+{% endblock %}

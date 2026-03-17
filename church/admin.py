@@ -22,6 +22,7 @@ from .models import (
     Page,
     ContactMessage,
     ContactMessageReply,
+    Notification,
     SiteSettings,
 )
 
@@ -96,3 +97,10 @@ class ChurchInvitationAdmin(admin.ModelAdmin):
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
     list_display = ['site_name', 'contact_email']
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ['title', 'category', 'church', 'recipient', 'is_read', 'created_at']
+    list_filter = ['category', 'church', 'is_read']
+    search_fields = ['title', 'body']

@@ -58,6 +58,14 @@
                         </a>
                     </li>
                     {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'manage_notifications' %}">
+                            <i class="bi bi-bell"></i> Notifications
+                            {% if unread_notifications_count %}
+                                <span class="badge bg-danger">{{ unread_notifications_count }}</span>
+                            {% endif %}
+                        </a>
+                    </li>
                     {% if "manage_messages" in capabilities %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'manage_messages' %}">

@@ -213,7 +213,9 @@ class ChurchMembershipAssignForm(forms.Form):
             membership.role = self.cleaned_data['role']
             membership.is_active = True
             membership.save(update_fields=['role', 'is_active'])
+            self.created = False
             return membership
+        self.created = True
         return ChurchMembership.objects.create(
             user=self.user,
             church=church,

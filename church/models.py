@@ -741,6 +741,51 @@ class ContactMessageReply(models.Model):
         return f"Réponse {self.pk} - {self.message_id}"
 
 
+class Notification(models.Model):
+    class Category(models.TextChoices):
+        INVITE = 'invite', 'Invitation'
+        ROLE = 'role', 'Changement de rôle'
+        MESSAGE = 'message', 'Nouveau message'
+        EVENT = 'event', 'Changement événement'
+        SERMON = 'sermon', 'Changement prédication'
+
+    church = models.ForeignKey(
+        Church,
+        on_delete=models.CASCADE,
+        related_name='notifications',
+        verbose_name="Église",
+    )
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='notifications',
+        verbose_name="Destinataire",
+    )
+    category = models.CharField(
+        max_length=20,
+        choices=Category.choices,
+        db_index=True,
+        verbose_name="Catégorie",
+    )
+    title = models.CharField(max_length=255, verbose_name="Titre")
+    body = models.TextField(blank=True, verbose_name="Message")
+    link = models.CharField(max_length=300, blank=True, verbose_name="Lien")
+    is_read = models.BooleanField(default=False, db_index=True, verbose_name="Lu")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Notification"
+        verbose_name_plural = "Notifications"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipient', 'is_read', 'created_at'], name='notif_rec_read_cr_idx'),
+            models.Index(fields=['church', 'created_at'], name='notif_ch_cr_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.get_category_display()} - {self.title}"
+
+
 class SiteSettings(models.Model):
     """
     PARAMÈTRES GLOBAUX DE LA PLATEFORME (singleton).

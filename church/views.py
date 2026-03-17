@@ -20,7 +20,7 @@ Il y a 2 sections :
 from django.shortcuts import render, get_object_or_404, redirect
 from datetime import timedelta
 from django.conf import settings
-from django.contrib.auth import login
+from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse, Http404
@@ -42,6 +42,7 @@ from .models import (
     ContactMessage,
     SiteSettings,
     filter_public_queryset,
+    Notification,
 )
 from .forms import (
     ChurchForm,
@@ -70,6 +71,13 @@ from .permissions import (
     CAP_MANAGE_USERS,
     CAP_VIEW_DASHBOARD,
     require_capability,
+)
+from .notifications import (
+    notify_church_admins,
+    notify_message_recipients,
+    notify_event_recipients,
+    notify_user,
+    notify_user_role_change,
 )
 from .tenancy import get_accessible_churches, get_membership, get_selected_church
 
@@ -186,6 +194,7 @@ def _handle_church_form(
     object_name=None,
     model=None,
     pk=None,
+    after_save=None,
 ):
     church = _require_church(request)
     if not church:
@@ -202,9 +211,12 @@ def _handle_church_form(
                 obj.church = church
             if obj.pk is None and getattr(obj, 'created_by_id', None) is None and request.user.is_authenticated:
                 obj.created_by = request.user
+            is_created = obj.pk is None
             obj.save()
             if hasattr(form, 'save_m2m'):
                 form.save_m2m()
+            if after_save:
+                after_save(obj, is_created)
             if is_ajax(request):
                 return JsonResponse({
                     'success': True,
@@ -228,12 +240,14 @@ def _handle_church_form(
     return render(request, template_name, context)
 
 
-def _handle_church_delete(request, model, pk, success_message, success_url_name):
+def _handle_church_delete(request, model, pk, success_message, success_url_name, *, after_delete=None):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
     obj = get_object_or_404(model, pk=pk, church=church)
     if request.method == 'POST':
+        if after_delete:
+            after_delete(obj)
         obj.delete()
         if is_ajax(request):
             return JsonResponse({'success': True, 'message': success_message})
@@ -363,6 +377,13 @@ def church_contact(request, church_slug):
             message = form.save(commit=False)
             message.church = church
             message.save()
+            notify_message_recipients(
+                church,
+                category="message",
+                title="Nouveau message reçu",
+                body=f"{message.sender_name} - {message.subject or 'Sans sujet'}",
+                link=reverse('read_message', args=[message.pk]),
+            )
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': 'Votre message a été envoyé avec succès !'})
             messages.success(request, 'Votre message a été envoyé avec succès !')
@@ -436,6 +457,23 @@ def accept_invite(request, token):
             invite.accepted_at = timezone.now()
             invite.accepted_by = request.user
             invite.save(update_fields=['status', 'accepted_at', 'accepted_by'])
+        notify_church_admins(
+            invite.church,
+            category="invite",
+            title="Invitation acceptée",
+            body=f"{request.user.get_full_name() or request.user.username} a rejoint l'église.",
+            link=reverse('manage_users'),
+            exclude=request.user,
+        )
+        if invite.invited_by and invite.invited_by != request.user:
+            notify_user(
+                invite.invited_by,
+                invite.church,
+                category="invite",
+                title="Invitation acceptée",
+                body=f"{request.user.get_full_name() or request.user.username} a accepté l'invitation.",
+                link=reverse('manage_users'),
+            )
         messages.success(request, "Invitation acceptée. Bienvenue !")
         return redirect('dashboard')
 
@@ -579,6 +617,16 @@ def manage_events(request):
 @require_capability(CAP_MANAGE_EVENTS)
 def add_event(request):
     """Ajouter un événement."""
+    def _after_save(event, created):
+        notify_event_recipients(
+            event.church,
+            category="event",
+            title="Événement créé" if created else "Événement mis à jour",
+            body=event.title,
+            link=reverse('manage_events'),
+            exclude=request.user,
+        )
+
     return _handle_church_form(
         request,
         form_class=EventForm,
@@ -586,6 +634,7 @@ def add_event(request):
         success_message='Événement ajouté !',
         success_url_name='manage_events',
         title='Ajouter un événement',
+        after_save=_after_save,
     )
 
 
@@ -593,6 +642,16 @@ def add_event(request):
 @require_capability(CAP_MANAGE_EVENTS)
 def edit_event(request, pk):
     """Modifier un événement."""
+    def _after_save(event, created):
+        notify_event_recipients(
+            event.church,
+            category="event",
+            title="Événement mis à jour",
+            body=event.title,
+            link=reverse('manage_events'),
+            exclude=request.user,
+        )
+
     return _handle_church_form(
         request,
         form_class=EventForm,
@@ -603,6 +662,7 @@ def edit_event(request, pk):
         model=Event,
         pk=pk,
         object_name='event',
+        after_save=_after_save,
     )
 
 
@@ -610,12 +670,23 @@ def edit_event(request, pk):
 @require_capability(CAP_MANAGE_EVENTS)
 def delete_event(request, pk):
     """Supprimer un événement."""
+    def _after_delete(event):
+        notify_event_recipients(
+            event.church,
+            category="event",
+            title="Événement supprimé",
+            body=event.title,
+            link=reverse('manage_events'),
+            exclude=request.user,
+        )
+
     return _handle_church_delete(
         request,
         model=Event,
         pk=pk,
         success_message='Événement supprimé !',
         success_url_name='manage_events',
+        after_delete=_after_delete,
     )
 
 
@@ -918,7 +989,15 @@ def add_user(request):
     if request.method == 'POST':
         form = ChurchUserCreateForm(request.POST)
         if form.is_valid():
-            form.save(church=church)
+            user = form.save(church=church)
+            notify_user_role_change(
+                church,
+                user,
+                title="Accès accordé",
+                body=f"Vous avez été ajouté(e) comme {form.cleaned_data['role']} pour {church.name}.",
+                link=reverse('dashboard'),
+                actor=request.user,
+            )
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': 'Utilisateur créé !', 'redirect': reverse('manage_users')})
             messages.success(request, 'Utilisateur créé !')
@@ -945,7 +1024,16 @@ def assign_user(request):
     if request.method == 'POST':
         form = ChurchMembershipAssignForm(request.POST, church=church)
         if form.is_valid():
-            form.save(church=church)
+            membership = form.save(church=church)
+            action_title = "Accès accordé" if getattr(form, 'created', False) else "Rôle mis à jour"
+            notify_user_role_change(
+                church,
+                membership.user,
+                title=action_title,
+                body=f"Votre rôle pour {church.name} est maintenant {membership.get_role_display()}",
+                link=reverse('dashboard'),
+                actor=request.user,
+            )
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': 'Utilisateur assigné !', 'redirect': reverse('manage_users')})
             messages.success(request, 'Utilisateur assigné !')
@@ -973,6 +1061,25 @@ def invite_user(request):
         form = ChurchInvitationForm(request.POST, church=church, invited_by=request.user)
         if form.is_valid():
             invite = form.save()
+            notify_church_admins(
+                church,
+                category="invite",
+                title="Invitation envoyée",
+                body=f"{invite.email} - {invite.get_role_display()}",
+                link=reverse('manage_users'),
+                exclude=request.user,
+            )
+            User = get_user_model()
+            invited_user = User.objects.filter(email__iexact=invite.email).first()
+            if invited_user:
+                notify_user(
+                    invited_user,
+                    church,
+                    category="invite",
+                    title="Invitation à rejoindre l'église",
+                    body=f"Invitation pour {church.name} ({invite.get_role_display()}).",
+                    link=reverse('accept_invite', args=[invite.token]),
+                )
             email_error = False
             try:
                 _send_invite_email(request, invite)
@@ -1007,6 +1114,14 @@ def revoke_invite(request, pk):
     if request.method == 'POST' and invite.status == ChurchInvitation.Status.PENDING:
         invite.status = ChurchInvitation.Status.REVOKED
         invite.save(update_fields=['status'])
+        notify_church_admins(
+            church,
+            category="invite",
+            title="Invitation révoquée",
+            body=f"{invite.email} - {invite.get_role_display()}",
+            link=reverse('manage_users'),
+            exclude=request.user,
+        )
         messages.success(request, "Invitation révoquée.")
     return redirect('manage_users')
 
@@ -1023,6 +1138,14 @@ def resend_invite(request, pk):
         invite.save(update_fields=['expires_at'])
         try:
             _send_invite_email(request, invite)
+            notify_church_admins(
+                church,
+                category="invite",
+                title="Invitation renvoyée",
+                body=f"{invite.email} - {invite.get_role_display()}",
+                link=reverse('manage_users'),
+                exclude=request.user,
+            )
             messages.success(request, "Invitation renvoyée.")
         except Exception:
             messages.error(request, "Impossible d'envoyer l'email pour le moment.")
@@ -1050,6 +1173,15 @@ def toggle_membership(request, pk):
     elif action == 'activate':
         membership.is_active = True
     membership.save(update_fields=['is_active'])
+    status_label = "actif" if membership.is_active else "inactif"
+    notify_user_role_change(
+        church,
+        membership.user,
+        title="Statut utilisateur mis à jour",
+        body=f"Votre accès est maintenant {status_label} pour {church.name}.",
+        link=reverse('dashboard'),
+        actor=request.user,
+    )
     messages.success(request, "Statut utilisateur mis à jour.")
     return redirect('manage_users')
 
@@ -1084,6 +1216,23 @@ def transfer_admin(request):
             if current_membership.pk != target.pk:
                 current_membership.role = ChurchMembership.Role.STAFF
                 current_membership.save(update_fields=['role'])
+        notify_user_role_change(
+            church,
+            target.user,
+            title="Administration transférée",
+            body=f"Vous êtes maintenant administrateur de {church.name}.",
+            link=reverse('manage_users'),
+            actor=request.user,
+        )
+        if current_membership.user != target.user:
+            notify_user_role_change(
+                church,
+                current_membership.user,
+                title="Administration transférée",
+                body=f"Votre rôle est maintenant {current_membership.get_role_display()} pour {church.name}.",
+                link=reverse('manage_users'),
+                actor=request.user,
+            )
         messages.success(request, "Administrateur transféré.")
         return redirect('manage_users')
 
@@ -1101,11 +1250,23 @@ def edit_membership(request, pk):
     if not church:
         return redirect('select_church')
     membership = get_object_or_404(ChurchMembership, pk=pk, church=church)
+    old_role = membership.role
+    old_active = membership.is_active
 
     if request.method == 'POST':
         form = ChurchMembershipUpdateForm(request.POST, instance=membership)
         if form.is_valid():
             form.save()
+            if membership.role != old_role or membership.is_active != old_active:
+                status_label = "actif" if membership.is_active else "inactif"
+                notify_user_role_change(
+                    church,
+                    membership.user,
+                    title="Rôle mis à jour",
+                    body=f"Rôle: {membership.get_role_display()} (statut: {status_label}).",
+                    link=reverse('manage_users'),
+                    actor=request.user,
+                )
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': 'Rôle mis à jour !', 'redirect': reverse('manage_users')})
             messages.success(request, 'Rôle mis à jour !')
@@ -1230,6 +1391,71 @@ def read_message(request, pk):
         'reply_form': reply_form,
         'replies': msg.replies.select_related('created_by'),
     })
+
+
+# --- Notifications ---
+
+@login_required
+@require_capability(CAP_VIEW_DASHBOARD)
+def manage_notifications(request):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+    notifications = Notification.objects.filter(recipient=request.user).select_related('church')
+    accessible_churches = get_accessible_churches(request.user)
+    church_filter = request.GET.get('church')
+    if church_filter:
+        notifications = notifications.filter(church_id=church_filter, church__in=accessible_churches)
+    status = _get_choice_param(request, 'status', {'read', 'unread'})
+    if status == 'read':
+        notifications = notifications.filter(is_read=True)
+    elif status == 'unread':
+        notifications = notifications.filter(is_read=False)
+    category = _get_choice_param(request, 'category', {c for c, _ in Notification.Category.choices})
+    if category:
+        notifications = notifications.filter(category=category)
+    paginator = Paginator(notifications, 15)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, 'admin_dashboard/notifications.html', {
+        'church': church,
+        'churches': accessible_churches,
+        'notifications': page_obj,
+        'page_obj': page_obj,
+        'querystring': _querystring_without_page(request),
+    })
+
+
+@login_required
+@require_capability(CAP_VIEW_DASHBOARD)
+def mark_notification_read(request, pk):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+    notification = get_object_or_404(
+        Notification,
+        pk=pk,
+        church=church,
+        recipient=request.user,
+    )
+    if request.method == 'POST':
+        notification.is_read = True
+        notification.save(update_fields=['is_read'])
+    return redirect('manage_notifications')
+
+
+@login_required
+@require_capability(CAP_VIEW_DASHBOARD)
+def mark_all_notifications_read(request):
+    church = _require_church(request)
+    if not church:
+        return redirect('select_church')
+    if request.method == 'POST':
+        Notification.objects.filter(
+            church=church,
+            recipient=request.user,
+            is_read=False,
+        ).update(is_read=True)
+    return redirect('manage_notifications')
 
 
 # --- Paramètres globaux (super-admin uniquement) ---

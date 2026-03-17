@@ -11,7 +11,7 @@ sans qu'on ait besoin de les passer manuellement dans chaque vue.
 =================================================================
 """
 
-from .models import SiteSettings
+from .models import Notification, SiteSettings
 from .permissions import get_capabilities_for_request
 
 
@@ -30,6 +30,12 @@ def church_context(request):
     membership = getattr(request, 'current_membership', None)
     menu_pages = getattr(church, 'menu_pages', None) if church else None
     capabilities = get_capabilities_for_request(request)
+    unread_notifications_count = 0
+    if request.user.is_authenticated:
+        unread_notifications_count = Notification.objects.filter(
+            recipient=request.user,
+            is_read=False,
+        ).count()
     return {
         'current_church': church,
         'current_membership': membership,
@@ -38,4 +44,5 @@ def church_context(request):
         'capabilities': capabilities,
         'app_name': site.site_name,
         'site_settings': site,
+        'unread_notifications_count': unread_notifications_count,
     }
