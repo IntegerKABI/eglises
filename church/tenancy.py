@@ -25,6 +25,7 @@ def get_accessible_churches(user, prefetch_pages=False):
             memberships__is_active=True,
             status__in=[Church.Status.ACTIVE, Church.Status.DRAFT],
         ).distinct()
+    churches = churches.order_by('name', 'id')
     if prefetch_pages:
         churches = churches.prefetch_related(
             Prefetch('pages', queryset=_menu_pages_queryset(), to_attr='menu_pages')
@@ -46,6 +47,11 @@ def get_selected_church(request, prefetch_pages=False):
 
     if churches.count() == 1:
         church = churches.first()
+        request.session['active_church_id'] = church.id
+        return church
+
+    church = churches.first()
+    if church:
         request.session['active_church_id'] = church.id
         return church
 

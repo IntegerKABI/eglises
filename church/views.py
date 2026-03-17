@@ -455,6 +455,7 @@ def select_church(request):
 
     return render(request, 'admin_dashboard/select_church.html', {
         'churches': churches,
+        'selected_church_id': request.session.get('active_church_id'),
     })
 
 

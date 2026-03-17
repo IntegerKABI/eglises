@@ -14,7 +14,7 @@
                         <div class="list-group mb-4">
                             {% for church in churches %}
                             <label class="list-group-item d-flex align-items-center gap-2">
-                                <input class="form-check-input" type="radio" name="church_id" value="{{ church.id }}" required>
+                                <input class="form-check-input" type="radio" name="church_id" value="{{ church.id }}" {% if church.id == selected_church_id %}checked{% endif %} required>
                                 <span>
                                     <strong>{{ church.name }}</strong><br>
                                     <small class="text-muted">{{ church.city|default:"—" }}, {{ church.country }}</small>
