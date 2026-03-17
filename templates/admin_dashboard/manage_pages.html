@@ -66,6 +66,15 @@
             <option value="0" {% if request.GET.in_menu == '0' %}selected{% endif %}>Non</option>
         </select>
     </div>
+    <div class="col-md-2">
+        <label class="form-label">Visibilité</label>
+        <select name="visibility" class="form-select">
+            <option value="" {% if not request.GET.visibility %}selected{% endif %}>Toutes</option>
+            <option value="public" {% if request.GET.visibility == 'public' %}selected{% endif %}>Public</option>
+            <option value="private" {% if request.GET.visibility == 'private' %}selected{% endif %}>Privé</option>
+            <option value="draft" {% if request.GET.visibility == 'draft' %}selected{% endif %}>Brouillon</option>
+        </select>
+    </div>
     <div class="col-md-4 d-flex gap-2">
         <button type="submit" class="btn btn-church w-100">Filtrer</button>
         <a href="{% url 'manage_pages' %}" class="btn btn-outline-secondary w-100">Réinitialiser</a>
@@ -82,7 +91,8 @@
                         <th>Slug</th>
                         <th>Ordre</th>
                         <th>Menu</th>
-                        <th>Actif</th>
+                        <th>Visibilité</th>
+                        <th>Publication</th>
                         <th class="text-end">Actions</th>
                     </tr>
                 </thead>
@@ -100,12 +110,15 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if page.is_active %}
-                                <span class="badge bg-success">Oui</span>
+                            {% if page.visibility == 'public' %}
+                                <span class="badge bg-success">Public</span>
+                            {% elif page.visibility == 'private' %}
+                                <span class="badge bg-warning text-dark">Privé</span>
                             {% else %}
-                                <span class="badge bg-secondary">Non</span>
+                                <span class="badge bg-secondary">Brouillon</span>
                             {% endif %}
                         </td>
+                        <td>{{ page.published_at|date:"d/m/Y H:i"|default:"—" }}</td>
                         <td class="text-end">
                             <a href="{% url 'edit_page' page.pk %}" class="btn btn-sm btn-outline-primary">
                                 <i class="bi bi-pencil"></i>
@@ -120,7 +133,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="text-center text-muted py-4">Aucune page enregistrée</td>
+                        <td colspan="7" class="text-center text-muted py-4">Aucune page enregistrée</td>
                     </tr>
                     {% endfor %}
                 </tbody>

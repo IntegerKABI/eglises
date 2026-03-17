@@ -31,7 +31,18 @@ from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Church, ChurchInvitation, ChurchMembership, Event, Sermon, Member, Page, ContactMessage, SiteSettings
+from .models import (
+    Church,
+    ChurchInvitation,
+    ChurchMembership,
+    Event,
+    Sermon,
+    Member,
+    Page,
+    ContactMessage,
+    SiteSettings,
+    filter_public_queryset,
+)
 from .forms import (
     ChurchForm,
     EventForm,
@@ -188,6 +199,8 @@ def _handle_church_form(
             obj = form.save(commit=False)
             if hasattr(obj, 'church_id'):
                 obj.church = church
+            if obj.pk is None and getattr(obj, 'created_by_id', None) is None and request.user.is_authenticated:
+                obj.created_by = request.user
             obj.save()
             if hasattr(form, 'save_m2m'):
                 form.save_m2m()
@@ -256,12 +269,11 @@ def church_home(request, church_slug):
     Ex: /eglise/demo/ → affiche l'église avec le slug "demo"
     """
     church = _get_public_church(request, church_slug)
-    upcoming_events = church.events.filter(
-        is_active=True,
+    upcoming_events = filter_public_queryset(church.events).filter(
         event_date__gte=timezone.now().date()
     )[:3]
-    latest_sermons = church.sermons.filter(is_active=True)[:3]
-    custom_pages = church.pages.filter(is_active=True, is_in_menu=True)
+    latest_sermons = filter_public_queryset(church.sermons)[:3]
+    custom_pages = filter_public_queryset(church.pages).filter(is_in_menu=True)
 
     return render(request, 'church/church_home.html', {
         'church': church,
@@ -274,7 +286,7 @@ def church_home(request, church_slug):
 def church_events(request, church_slug):
     """Liste de tous les événements d'une église."""
     church = _get_public_church(request, church_slug)
-    events = church.events.filter(is_active=True)
+    events = filter_public_queryset(church.events)
     q = _get_text_param(request, 'q', 100)
     if q:
         events = events.filter(
@@ -306,7 +318,7 @@ def church_events(request, church_slug):
 def church_sermons(request, church_slug):
     """Liste de toutes les prédications d'une église."""
     church = _get_public_church(request, church_slug)
-    sermons = church.sermons.filter(is_active=True)
+    sermons = filter_public_queryset(church.sermons)
     q = _get_text_param(request, 'q', 100)
     if q:
         sermons = sermons.filter(
@@ -333,7 +345,7 @@ def church_sermons(request, church_slug):
 def church_page(request, church_slug, page_slug):
     """Affiche une page dynamique personnalisée."""
     church = _get_public_church(request, church_slug)
-    page = get_object_or_404(Page, church=church, slug=page_slug, is_active=True)
+    page = get_object_or_404(filter_public_queryset(Page.objects.filter(church=church, slug=page_slug)))
     return render(request, 'church/custom_page.html', {
         'church': church,
         'page': page,
@@ -538,6 +550,9 @@ def manage_events(request):
         events = events.filter(is_active=True)
     elif status == 'inactive':
         events = events.filter(is_active=False)
+    visibility = _get_choice_param(request, 'visibility', {'public', 'private', 'draft'})
+    if visibility:
+        events = events.filter(visibility=visibility)
     featured = _parse_bool_param(request.GET.get('featured'))
     if featured is True:
         events = events.filter(is_featured=True)
@@ -625,6 +640,9 @@ def manage_sermons(request):
         sermons = sermons.filter(is_active=True)
     elif status == 'inactive':
         sermons = sermons.filter(is_active=False)
+    visibility = _get_choice_param(request, 'visibility', {'public', 'private', 'draft'})
+    if visibility:
+        sermons = sermons.filter(visibility=visibility)
     featured = _parse_bool_param(request.GET.get('featured'))
     if featured is True:
         sermons = sermons.filter(is_featured=True)
@@ -780,6 +798,9 @@ def manage_pages(request):
         pages = pages.filter(is_active=True)
     elif status == 'inactive':
         pages = pages.filter(is_active=False)
+    visibility = _get_choice_param(request, 'visibility', {'public', 'private', 'draft'})
+    if visibility:
+        pages = pages.filter(visibility=visibility)
     in_menu = _parse_bool_param(request.GET.get('in_menu'))
     if in_menu is True:
         pages = pages.filter(is_in_menu=True)

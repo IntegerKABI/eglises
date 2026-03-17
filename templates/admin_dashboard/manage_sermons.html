@@ -64,6 +64,15 @@
             <option value="0" {% if request.GET.featured == '0' %}selected{% endif %}>Non</option>
         </select>
     </div>
+    <div class="col-md-2">
+        <label class="form-label">Visibilité</label>
+        <select name="visibility" class="form-select">
+            <option value="" {% if not request.GET.visibility %}selected{% endif %}>Toutes</option>
+            <option value="public" {% if request.GET.visibility == 'public' %}selected{% endif %}>Public</option>
+            <option value="private" {% if request.GET.visibility == 'private' %}selected{% endif %}>Privé</option>
+            <option value="draft" {% if request.GET.visibility == 'draft' %}selected{% endif %}>Brouillon</option>
+        </select>
+    </div>
     <div class="col-md-3 d-flex gap-2">
         <button type="submit" class="btn btn-church w-100">Filtrer</button>
         <a href="{% url 'manage_sermons' %}" class="btn btn-outline-secondary w-100">Réinitialiser</a>
@@ -79,6 +88,8 @@
                         <th>Titre</th>
                         <th>Prédicateur</th>
                         <th>Date</th>
+                        <th>Visibilité</th>
+                        <th>Publication</th>
                         <th>Réf. biblique</th>
                         <th class="text-end">Actions</th>
                     </tr>
@@ -89,6 +100,16 @@
                         <td>{{ sermon.title }}</td>
                         <td>{{ sermon.preacher|default:"—" }}</td>
                         <td>{{ sermon.sermon_date|date:"d/m/Y"|default:"—" }}</td>
+                        <td>
+                            {% if sermon.visibility == 'public' %}
+                                <span class="badge bg-success">Public</span>
+                            {% elif sermon.visibility == 'private' %}
+                                <span class="badge bg-warning text-dark">Privé</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Brouillon</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ sermon.published_at|date:"d/m/Y H:i"|default:"—" }}</td>
                         <td>{{ sermon.bible_reference|default:"—" }}</td>
                         <td class="text-end">
                             <a href="{% url 'edit_sermon' sermon.pk %}" class="btn btn-sm btn-outline-primary">
@@ -104,7 +125,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="text-center text-muted py-4">Aucune prédication enregistrée</td>
+                        <td colspan="7" class="text-center text-muted py-4">Aucune prédication enregistrée</td>
                     </tr>
                     {% endfor %}
                 </tbody>

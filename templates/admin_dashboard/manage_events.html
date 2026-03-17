@@ -65,6 +65,15 @@
         </select>
     </div>
     <div class="col-md-2">
+        <label class="form-label">Visibilité</label>
+        <select name="visibility" class="form-select">
+            <option value="" {% if not request.GET.visibility %}selected{% endif %}>Toutes</option>
+            <option value="public" {% if request.GET.visibility == 'public' %}selected{% endif %}>Public</option>
+            <option value="private" {% if request.GET.visibility == 'private' %}selected{% endif %}>Privé</option>
+            <option value="draft" {% if request.GET.visibility == 'draft' %}selected{% endif %}>Brouillon</option>
+        </select>
+    </div>
+    <div class="col-md-2">
         <label class="form-label">Période</label>
         <select name="when" class="form-select">
             <option value="" {% if not request.GET.when %}selected{% endif %}>Toutes</option>
@@ -87,6 +96,8 @@
                         <th>Titre</th>
                         <th>Date</th>
                         <th>Lieu</th>
+                        <th>Visibilité</th>
+                        <th>Publication</th>
                         <th>Mis en avant</th>
                         <th class="text-end">Actions</th>
                     </tr>
@@ -97,6 +108,16 @@
                         <td>{{ event.title }}</td>
                         <td>{{ event.event_date|date:"d/m/Y" }}</td>
                         <td>{{ event.location|default:"—" }}</td>
+                        <td>
+                            {% if event.visibility == 'public' %}
+                                <span class="badge bg-success">Public</span>
+                            {% elif event.visibility == 'private' %}
+                                <span class="badge bg-warning text-dark">Privé</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Brouillon</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ event.published_at|date:"d/m/Y H:i"|default:"—" }}</td>
                         <td>
                             {% if event.is_featured %}
                                 <span class="badge bg-success"><i class="bi bi-star-fill"></i> Oui</span>
@@ -118,7 +139,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="text-center text-muted py-4">Aucun événement enregistré</td>
+                        <td colspan="7" class="text-center text-muted py-4">Aucun événement enregistré</td>
                     </tr>
                     {% endfor %}
                 </tbody>

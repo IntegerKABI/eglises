@@ -1,16 +1,18 @@
 from django.db.models import Prefetch
 
-from .models import Church, ChurchMembership, Page
+from .models import Church, ChurchMembership, Page, filter_public_queryset
 
 
 def _menu_pages_queryset():
-    return Page.objects.filter(is_active=True, is_in_menu=True).only(
+    return filter_public_queryset(Page.objects.filter(is_in_menu=True)).only(
         'id',
         'church_id',
         'slug',
         'title',
         'is_in_menu',
         'is_active',
+        'visibility',
+        'published_at',
     )
 
 

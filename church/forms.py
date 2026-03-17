@@ -43,12 +43,13 @@ class EventForm(forms.ModelForm):
     class Meta:
         model = Event
         fields = ['title', 'description', 'image', 'event_date', 'event_time',
-                  'end_date', 'location', 'is_featured', 'is_active']
+                  'end_date', 'location', 'visibility', 'published_at', 'is_featured', 'is_active']
         widgets = {
             'description': forms.Textarea(attrs={'rows': 3}),
             'event_date': forms.DateInput(attrs={'type': 'date'}),
             'event_time': forms.TimeInput(attrs={'type': 'time'}),
             'end_date': forms.DateInput(attrs={'type': 'date'}),
+            'published_at': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
         }
 
     def clean(self):
@@ -68,10 +69,12 @@ class SermonForm(forms.ModelForm):
     class Meta:
         model = Sermon
         fields = ['title', 'preacher', 'description', 'image', 'video_url',
-                  'audio_url', 'sermon_date', 'bible_reference', 'is_featured', 'is_active']
+                  'audio_url', 'sermon_date', 'bible_reference', 'visibility', 'published_at',
+                  'is_featured', 'is_active']
         widgets = {
             'description': forms.Textarea(attrs={'rows': 3}),
             'sermon_date': forms.DateInput(attrs={'type': 'date'}),
+            'published_at': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
         }
 
 
@@ -91,9 +94,11 @@ class PageForm(forms.ModelForm):
     """Formulaire de création/modification d'une page."""
     class Meta:
         model = Page
-        fields = ['title', 'content', 'image', 'sort_order', 'is_in_menu', 'is_active']
+        fields = ['title', 'content', 'image', 'sort_order', 'is_in_menu',
+                  'visibility', 'published_at', 'is_active']
         widgets = {
             'content': forms.Textarea(attrs={'rows': 10}),
+            'published_at': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
         }
 
 

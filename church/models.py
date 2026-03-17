@@ -20,6 +20,7 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -81,6 +82,16 @@ def upload_site_asset(instance, filename):
 
 def _default_invite_expiry():
     return timezone.now() + timedelta(days=7)
+
+
+def filter_public_queryset(queryset):
+    now = timezone.now()
+    return queryset.filter(
+        visibility='public',
+        is_active=True,
+    ).filter(
+        Q(published_at__isnull=True) | Q(published_at__lte=now)
+    )
 
 
 class Church(models.Model):
@@ -321,10 +332,25 @@ class Event(models.Model):
         null=True,
         verbose_name="Image"
     )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_events',
+        verbose_name="Créé par",
+    )
     event_date = models.DateField(verbose_name="Date", db_index=True)
     event_time = models.TimeField(blank=True, null=True, verbose_name="Heure")
     end_date = models.DateField(blank=True, null=True, verbose_name="Date de fin")
     location = models.CharField(max_length=255, blank=True, verbose_name="Lieu")
+    visibility = models.CharField(
+        max_length=20,
+        choices=[('public', 'Public'), ('private', 'Privé'), ('draft', 'Brouillon')],
+        default='public',
+        verbose_name="Visibilité",
+    )
+    published_at = models.DateTimeField(blank=True, null=True, verbose_name="Date de publication")
     is_featured = models.BooleanField(default=False, verbose_name="Mis en avant")
     is_active = models.BooleanField(default=True, verbose_name="Actif")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -337,6 +363,7 @@ class Event(models.Model):
             models.Index(fields=['church', 'is_active', 'event_date']),
             models.Index(fields=['church', 'is_featured']),
             models.Index(fields=['church', 'event_date']),
+            models.Index(fields=['church', 'visibility', 'published_at'], name='evt_ch_vis_pub_idx'),
         ]
 
     def __str__(self):
@@ -373,6 +400,14 @@ class Sermon(models.Model):
         null=True,
         verbose_name="Image"
     )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_sermons',
+        verbose_name="Créé par",
+    )
     video_url = models.URLField(blank=True, verbose_name="Lien vidéo (YouTube)")
     audio_url = models.URLField(blank=True, verbose_name="Lien audio")
     sermon_date = models.DateField(blank=True, null=True, verbose_name="Date", db_index=True)
@@ -382,6 +417,13 @@ class Sermon(models.Model):
         verbose_name="Référence biblique",
         help_text="Ex: Jean 3:16"
     )
+    visibility = models.CharField(
+        max_length=20,
+        choices=[('public', 'Public'), ('private', 'Privé'), ('draft', 'Brouillon')],
+        default='public',
+        verbose_name="Visibilité",
+    )
+    published_at = models.DateTimeField(blank=True, null=True, verbose_name="Date de publication")
     is_featured = models.BooleanField(default=False, verbose_name="Mis en avant")
     is_active = models.BooleanField(default=True, verbose_name="Actif")
     views_count = models.PositiveIntegerField(default=0, verbose_name="Nombre de vues")
@@ -395,6 +437,7 @@ class Sermon(models.Model):
             models.Index(fields=['church', 'is_active', 'sermon_date']),
             models.Index(fields=['church', 'is_featured']),
             models.Index(fields=['church', 'sermon_date']),
+            models.Index(fields=['church', 'visibility', 'published_at'], name='serm_ch_vis_pub_idx'),
         ]
 
     def __str__(self):
@@ -481,8 +524,23 @@ class Page(models.Model):
         null=True,
         verbose_name="Image"
     )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_pages',
+        verbose_name="Créé par",
+    )
     sort_order = models.IntegerField(default=0, verbose_name="Ordre d'affichage")
     is_in_menu = models.BooleanField(default=True, verbose_name="Afficher dans le menu")
+    visibility = models.CharField(
+        max_length=20,
+        choices=[('public', 'Public'), ('private', 'Privé'), ('draft', 'Brouillon')],
+        default='public',
+        verbose_name="Visibilité",
+    )
+    published_at = models.DateTimeField(blank=True, null=True, verbose_name="Date de publication")
     is_active = models.BooleanField(default=True, verbose_name="Active")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -495,6 +553,7 @@ class Page(models.Model):
         indexes = [
             models.Index(fields=['church', 'is_active', 'is_in_menu']),
             models.Index(fields=['church', 'sort_order']),
+            models.Index(fields=['church', 'visibility', 'published_at'], name='page_ch_vis_pub_idx'),
         ]
 
     def __str__(self):
