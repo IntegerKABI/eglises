@@ -194,16 +194,16 @@ class Church(models.Model):
 
     def save(self, *args, **kwargs):
         """Génère automatiquement le slug à partir du nom."""
-        if not self.slug:
-            queryset = Church.objects.all()
-            if self.pk:
-                queryset = queryset.exclude(pk=self.pk)
-            self.slug = _generate_unique_slug(
-                self.name,
-                queryset,
-                self._meta.get_field("slug").max_length,
-                "eglise",
-            )
+        queryset = Church.objects.all()
+        if self.pk:
+            queryset = queryset.exclude(pk=self.pk)
+        base_value = self.slug or self.name
+        self.slug = _generate_unique_slug(
+            base_value,
+            queryset,
+            self._meta.get_field("slug").max_length,
+            "eglise",
+        )
         self.is_active = self.status == self.Status.ACTIVE
         super().save(*args, **kwargs)
 
@@ -325,6 +325,7 @@ class Event(models.Model):
         verbose_name="Église"
     )
     title = models.CharField(max_length=255, verbose_name="Titre")
+    slug = models.SlugField(max_length=120, verbose_name="Identifiant URL")
     description = models.TextField(blank=True, verbose_name="Description")
     image = models.ImageField(
         upload_to=upload_event_image,
@@ -365,6 +366,9 @@ class Event(models.Model):
             models.Index(fields=['church', 'event_date']),
             models.Index(fields=['church', 'visibility', 'published_at'], name='evt_ch_vis_pub_idx'),
         ]
+        constraints = [
+            models.UniqueConstraint(fields=['church', 'slug'], name='uniq_event_church_slug'),
+        ]
 
     def __str__(self):
         return f"{self.title} ({self.event_date})"
@@ -381,6 +385,19 @@ class Event(models.Model):
                 }
             )
 
+    def save(self, *args, **kwargs):
+        queryset = Event.objects.filter(church=self.church)
+        if self.pk:
+            queryset = queryset.exclude(pk=self.pk)
+        base_value = self.slug or self.title
+        self.slug = _generate_unique_slug(
+            base_value,
+            queryset,
+            self._meta.get_field("slug").max_length,
+            "evenement",
+        )
+        super().save(*args, **kwargs)
+
 class Sermon(models.Model):
     """
     PRÉDICATIONS — Messages, enseignements, avec lien vidéo/audio.
@@ -392,6 +409,7 @@ class Sermon(models.Model):
         verbose_name="Église"
     )
     title = models.CharField(max_length=255, verbose_name="Titre")
+    slug = models.SlugField(max_length=120, verbose_name="Identifiant URL")
     preacher = models.CharField(max_length=150, blank=True, verbose_name="Prédicateur")
     description = models.TextField(blank=True, verbose_name="Description")
     image = models.ImageField(
@@ -439,9 +457,25 @@ class Sermon(models.Model):
             models.Index(fields=['church', 'sermon_date']),
             models.Index(fields=['church', 'visibility', 'published_at'], name='serm_ch_vis_pub_idx'),
         ]
+        constraints = [
+            models.UniqueConstraint(fields=['church', 'slug'], name='uniq_sermon_church_slug'),
+        ]
 
     def __str__(self):
         return self.title
+
+    def save(self, *args, **kwargs):
+        queryset = Sermon.objects.filter(church=self.church)
+        if self.pk:
+            queryset = queryset.exclude(pk=self.pk)
+        base_value = self.slug or self.title
+        self.slug = _generate_unique_slug(
+            base_value,
+            queryset,
+            self._meta.get_field("slug").max_length,
+            "sermon",
+        )
+        super().save(*args, **kwargs)
 
 
 class Member(models.Model):
@@ -562,16 +596,16 @@ class Page(models.Model):
     def save(self, *args, **kwargs):
         if self.content:
             self.content = strip_tags(self.content)
-        if not self.slug:
-            queryset = Page.objects.filter(church=self.church)
-            if self.pk:
-                queryset = queryset.exclude(pk=self.pk)
-            self.slug = _generate_unique_slug(
-                self.title,
-                queryset,
-                self._meta.get_field("slug").max_length,
-                "page",
-            )
+        queryset = Page.objects.filter(church=self.church)
+        if self.pk:
+            queryset = queryset.exclude(pk=self.pk)
+        base_value = self.slug or self.title
+        self.slug = _generate_unique_slug(
+            base_value,
+            queryset,
+            self._meta.get_field("slug").max_length,
+            "page",
+        )
         super().save(*args, **kwargs)
 
 

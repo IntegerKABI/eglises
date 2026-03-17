@@ -26,16 +26,18 @@ class ChurchAdmin(admin.ModelAdmin):
 
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
-    list_display = ['title', 'church', 'event_date', 'visibility', 'published_at', 'created_by', 'is_featured', 'is_active']
+    list_display = ['title', 'church', 'slug', 'event_date', 'visibility', 'published_at', 'created_by', 'is_featured', 'is_active']
     list_filter = ['church', 'visibility', 'is_featured', 'is_active', 'event_date']
     search_fields = ['title', 'description']
+    prepopulated_fields = {'slug': ('title',)}
 
 
 @admin.register(Sermon)
 class SermonAdmin(admin.ModelAdmin):
-    list_display = ['title', 'church', 'preacher', 'sermon_date', 'visibility', 'published_at', 'created_by', 'views_count']
+    list_display = ['title', 'church', 'slug', 'preacher', 'sermon_date', 'visibility', 'published_at', 'created_by', 'views_count']
     list_filter = ['church', 'visibility', 'is_featured', 'is_active']
     search_fields = ['title', 'preacher', 'bible_reference']
+    prepopulated_fields = {'slug': ('title',)}
 
 
 @admin.register(Member)
