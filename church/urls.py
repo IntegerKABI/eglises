@@ -67,6 +67,9 @@ urlpatterns = [
     path('dashboard/notifications/<int:pk>/read/', views.mark_notification_read, name='mark_notification_read'),
     path('dashboard/notifications/read-all/', views.mark_all_notifications_read, name='mark_all_notifications_read'),
 
+    # Audit
+    path('dashboard/audit/', views.manage_audit_logs, name='manage_audit_logs'),
+
     # Utilisateurs
     path('dashboard/utilisateurs/', views.manage_users, name='manage_users'),
     path('dashboard/utilisateurs/ajouter/', views.add_user, name='add_user'),

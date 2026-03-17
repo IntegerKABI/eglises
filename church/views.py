@@ -44,6 +44,7 @@ from .models import (
     SiteSettings,
     filter_public_queryset,
     Notification,
+    AuditLog,
 )
 from .forms import (
     ChurchForm,
@@ -1622,6 +1623,44 @@ def mark_all_notifications_read(request):
             is_read=False,
         ).update(is_read=True)
     return redirect('manage_notifications')
+
+
+@login_required
+def manage_audit_logs(request):
+    if request.user.is_superuser:
+        churches = Church.objects.all()
+        logs = AuditLog.objects.select_related('actor', 'church')
+    else:
+        churches = Church.objects.filter(
+            memberships__user=request.user,
+            memberships__role=ChurchMembership.Role.ADMIN,
+            memberships__is_active=True,
+        ).distinct()
+        if not churches.exists():
+            messages.error(request, "Accès refusé.")
+            return redirect('dashboard')
+        logs = AuditLog.objects.select_related('actor', 'church').filter(church__in=churches)
+
+    church_filter = request.GET.get('church')
+    if church_filter == 'platform' and request.user.is_superuser:
+        logs = logs.filter(church__isnull=True)
+    elif church_filter:
+        logs = logs.filter(church_id=church_filter)
+
+    action = _get_text_param(request, 'action', 50)
+    if action:
+        logs = logs.filter(action__icontains=action)
+
+    paginator = Paginator(logs, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, 'admin_dashboard/audit_logs.html', {
+        'church': getattr(request, 'current_church', None),
+        'churches': churches,
+        'logs': page_obj,
+        'page_obj': page_obj,
+        'querystring': _querystring_without_page(request),
+        'show_platform': request.user.is_superuser,
+    })
 
 
 # --- Paramètres globaux (super-admin uniquement) ---
