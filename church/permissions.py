@@ -40,6 +40,8 @@ ROLE_CAPABILITIES = {
     },
     ChurchMembership.Role.SECRETARY: {
         CAP_VIEW_DASHBOARD,
+        CAP_MANAGE_EVENTS,
+        CAP_MANAGE_SERMONS,
         CAP_MANAGE_MESSAGES,
     },
 }
