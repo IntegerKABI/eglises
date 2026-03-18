@@ -35,9 +35,21 @@ def get_accessible_churches(user, prefetch_pages=False):
     return churches
 
 
+def get_accessible_church_count(request):
+    count = getattr(request, "accessible_church_count", None)
+    if count is not None:
+        return count
+    count = get_accessible_churches(request.user).count()
+    request.accessible_church_count = count
+    return count
+
+
 def get_selected_church(request, prefetch_pages=False):
     churches = get_accessible_churches(request.user, prefetch_pages=prefetch_pages)
-    if not churches.exists():
+    church_count = churches.count()
+    request.accessible_church_count = church_count
+    if church_count == 0:
+        request.session.pop('active_church_id', None)
         return None
 
     church_id = request.session.get('active_church_id')
@@ -47,13 +59,8 @@ def get_selected_church(request, prefetch_pages=False):
             return church
         request.session.pop('active_church_id', None)
 
-    if churches.count() == 1:
+    if church_count == 1:
         church = churches.first()
-        request.session['active_church_id'] = church.id
-        return church
-
-    church = churches.first()
-    if church:
         request.session['active_church_id'] = church.id
         return church
 

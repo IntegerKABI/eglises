@@ -13,6 +13,7 @@ sans qu'on ait besoin de les passer manuellement dans chaque vue.
 
 from .models import ChurchMembership, Notification, SiteSettings
 from .permissions import get_capabilities_for_request
+from .tenancy import get_accessible_church_count
 
 
 def church_context(request):
@@ -31,7 +32,9 @@ def church_context(request):
     menu_pages = getattr(church, 'menu_pages', None) if church else None
     capabilities = get_capabilities_for_request(request)
     can_view_audit = False
+    can_switch_church = False
     if request.user.is_authenticated:
+        can_switch_church = get_accessible_church_count(request) > 1
         if request.user.is_superuser:
             can_view_audit = True
         else:
@@ -53,6 +56,7 @@ def church_context(request):
         'menu_pages': menu_pages,
         'capabilities': capabilities,
         'can_view_audit': can_view_audit,
+        'can_switch_church': can_switch_church,
         'app_name': site.site_name,
         'site_settings': site,
         'unread_notifications_count': unread_notifications_count,
