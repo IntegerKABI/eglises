@@ -27,6 +27,8 @@ from django.utils import timezone
 from django.utils.html import strip_tags
 from django.utils.text import slugify
 
+from .membership_policy import validate_single_church_membership
+
 
 def _generate_unique_slug(base_value, queryset, max_length, fallback):
     base_slug = slugify(base_value) or fallback
@@ -309,11 +311,21 @@ class ChurchMembership(models.Model):
     def __str__(self):
         return f"{self.user} â€” {self.church} ({self.get_role_display()})"
 
+    def clean(self):
+        super().clean()
+        if self.is_active:
+            validate_single_church_membership(self.user, church=self.church)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
 
 class ChurchInvitation(models.Model):
     class Status(models.TextChoices):
         PENDING = 'pending', 'En attente'
         ACCEPTED = 'accepted', 'AcceptÃ©e'
+        DECLINED = 'declined', 'RefusÃ©e'
         REVOKED = 'revoked', 'RÃ©voquÃ©e'
         EXPIRED = 'expired', 'ExpirÃ©e'
 
@@ -349,6 +361,7 @@ class ChurchInvitation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(default=_default_invite_expiry)
     accepted_at = models.DateTimeField(null=True, blank=True)
+    declined_at = models.DateTimeField(null=True, blank=True)
     accepted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

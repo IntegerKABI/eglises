@@ -52,6 +52,10 @@ def get_selected_church(request, prefetch_pages=False):
         request.session.pop('active_church_id', None)
         return None
 
+    if not request.user.is_superuser and church_count > 1:
+        request.session.pop('active_church_id', None)
+        return None
+
     church_id = request.session.get('active_church_id')
     if church_id:
         church = churches.filter(id=church_id).first()

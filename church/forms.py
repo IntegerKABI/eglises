@@ -14,6 +14,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.db import transaction
 
 from .models import (
     Church,
@@ -27,6 +28,7 @@ from .models import (
     ContactMessageReply,
     SiteSettings,
 )
+from .membership_policy import validate_single_church_membership
 
 
 class ChurchForm(forms.ModelForm):
@@ -162,16 +164,19 @@ class ChurchUserCreateForm(forms.ModelForm):
         return cleaned_data
 
     def save(self, church, commit=True):
+        if not commit:
+            raise ValueError("ChurchUserCreateForm.save requires commit=True.")
+
         user = super().save(commit=False)
         user.set_password(self.cleaned_data['password1'])
-        if commit:
+        with transaction.atomic():
             user.save()
-        ChurchMembership.objects.create(
-            user=user,
-            church=church,
-            role=self.cleaned_data['role'],
-            is_active=True,
-        )
+            ChurchMembership.objects.create(
+                user=user,
+                church=church,
+                role=self.cleaned_data['role'],
+                is_active=True,
+            )
         return user
 
 
@@ -199,6 +204,7 @@ class ChurchMembershipAssignForm(forms.Form):
         if not user:
             raise ValidationError("Aucun utilisateur trouvé avec cet identifiant.")
         if self.church:
+            validate_single_church_membership(user, church=self.church)
             existing = ChurchMembership.objects.filter(user=user, church=self.church).first()
             if existing and existing.is_active:
                 raise ValidationError("Cet utilisateur est déjà membre actif de cette église.")
@@ -246,6 +252,11 @@ class ChurchMembershipUpdateForm(forms.ModelForm):
             ).exclude(pk=self.instance.pk)
             if not other_admins.exists():
                 raise ValidationError("Au moins un administrateur actif est requis.")
+        if new_active:
+            validate_single_church_membership(
+                self.instance.user,
+                church=self.instance.church,
+            )
         return cleaned_data
 
 
@@ -264,6 +275,10 @@ class ChurchInvitationForm(forms.ModelForm):
         if not email:
             return email
         if self.church:
+            User = get_user_model()
+            existing_user = User.objects.filter(email__iexact=email).first()
+            if existing_user:
+                validate_single_church_membership(existing_user, church=self.church)
             if ChurchMembership.objects.filter(church=self.church, user__email__iexact=email, is_active=True).exists():
                 raise ValidationError("Cet utilisateur est déjà membre actif de cette église.")
             if ChurchInvitation.objects.filter(

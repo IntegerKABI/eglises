@@ -27,6 +27,8 @@ urlpatterns = [
     path('eglise/<slug:church_slug>/contact/', views.church_contact, name='church_contact'),
     path('eglise/<slug:church_slug>/page/<slug:page_slug>/', views.church_page, name='church_page'),
     path('invite/<uuid:token>/', views.accept_invite, name='accept_invite'),
+    path('invitations/', views.pending_invitations, name='pending_invitations'),
+    path('invite/<uuid:token>/decline/', views.decline_invite, name='decline_invite'),
 
     # === DASHBOARD (administration) ===
     path('dashboard/', views.dashboard, name='dashboard'),

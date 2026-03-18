@@ -17,21 +17,23 @@ Il y a 2 sections :
 =================================================================
 """
 
-from django.shortcuts import render, get_object_or_404, redirect
 from datetime import timedelta
+
 from django.conf import settings
-from django.contrib.auth import get_user_model, login
-from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.core.exceptions import ValidationError
-from django.http import JsonResponse, Http404
+from django.contrib.auth import get_user_model, login, logout
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import LoginView
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
+from django.http import Http404, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from .models import (
     Church,
@@ -84,7 +86,55 @@ from .notifications import (
 )
 from .audit import log_audit
 from .limits import enforce_limits_for_model, get_plan_usage
+from .membership_policy import (
+    get_pending_invitations_for_user,
+    validate_single_church_membership,
+)
 from .tenancy import get_accessible_churches, get_membership, get_selected_church
+
+
+class TenantLoginView(LoginView):
+    template_name = "registration/login.html"
+
+    def get_success_url(self):
+        redirect_to = self.get_redirect_url()
+        if redirect_to:
+            return redirect_to
+
+        user = self.request.user
+        churches = get_accessible_churches(user)
+        church_count = churches.count()
+
+        if church_count == 0:
+            self.request.session.pop("active_church_id", None)
+            if _has_pending_invitations(user):
+                return reverse("pending_invitations")
+            logout(self.request)
+            messages.error(
+                self.request,
+                "Votre compte n'appartient a aucune eglise active et vous n'avez aucune invitation en attente. Contactez l'administration de l'eglise ou la plateforme.",
+            )
+            return reverse("home")
+
+        if not user.is_superuser and church_count > 1:
+            self.request.session.pop("active_church_id", None)
+            logout(self.request)
+            messages.error(
+                self.request,
+                "Votre compte est associe a plusieurs eglises actives. Contactez le superadministrateur.",
+            )
+            return reverse("home")
+
+        active_church_id = self.request.session.get("active_church_id")
+        if active_church_id and churches.filter(id=active_church_id).exists():
+            return reverse("dashboard")
+
+        if church_count == 1:
+            self.request.session["active_church_id"] = churches.values_list("id", flat=True).first()
+            return reverse("dashboard")
+
+        self.request.session.pop("active_church_id", None)
+        return reverse("select_church")
 
 
 def is_ajax(request):
@@ -163,6 +213,10 @@ def _mark_invite_notifications_read(user, invite):
     ).filter(
         Q(link__icontains=str(invite.token)) | Q(title__icontains="Invitation")
     ).update(is_read=True)
+
+
+def _has_pending_invitations(user):
+    return get_pending_invitations_for_user(user).exists()
 
 
 def _require_church(request):
@@ -458,15 +512,21 @@ def accept_invite(request, token):
     invite = get_object_or_404(ChurchInvitation, token=token)
     if invite.status != ChurchInvitation.Status.PENDING:
         messages.info(request, "Cette invitation n'est plus disponible.")
-        return redirect('dashboard')
+        if request.user.is_authenticated:
+            return redirect('pending_invitations')
+        return redirect('home')
     if invite.church.status in {Church.Status.SUSPENDED, Church.Status.ARCHIVED}:
         messages.error(request, "Cette église n'accepte pas de nouvelles invitations.")
-        return redirect('dashboard')
+        if request.user.is_authenticated:
+            return redirect('pending_invitations')
+        return redirect('home')
     if invite.is_expired:
         invite.status = ChurchInvitation.Status.EXPIRED
         invite.save(update_fields=['status'])
         messages.error(request, "Cette invitation a expiré.")
-        return redirect('dashboard')
+        if request.user.is_authenticated:
+            return redirect('pending_invitations')
+        return redirect('home')
 
     if not request.user.is_authenticated:
         form = InviteSignupForm(request.POST or None, email=invite.email)
@@ -485,6 +545,12 @@ def accept_invite(request, token):
     if not user_email or user_email != invite.email.lower():
         messages.error(request, "Cette invitation ne correspond pas à votre email.")
         return redirect('dashboard')
+
+    try:
+        validate_single_church_membership(request.user, church=invite.church)
+    except ValidationError as exc:
+        messages.error(request, exc.messages[0])
+        return redirect('pending_invitations')
 
     if request.method == 'POST':
         with transaction.atomic():
@@ -550,13 +616,95 @@ def accept_invite(request, token):
 
 
 @login_required
+def pending_invitations(request):
+    invitations = get_pending_invitations_for_user(request.user)
+    if invitations.exists():
+        return render(request, 'church/pending_invitations.html', {
+            'invitations': invitations,
+        })
+
+    churches = get_accessible_churches(request.user)
+    if churches.exists():
+        return redirect('dashboard')
+
+    logout(request)
+    messages.info(
+        request,
+        "Votre compte n'appartient a aucune eglise active et vous n'avez aucune invitation en attente. Contactez l'administration de l'eglise ou la plateforme.",
+    )
+    return redirect('home')
+
+@login_required
+def decline_invite(request, token):
+    invite = get_object_or_404(
+        ChurchInvitation,
+        token=token,
+        status=ChurchInvitation.Status.PENDING,
+        email__iexact=request.user.email,
+    )
+    if request.method != 'POST':
+        return redirect('pending_invitations')
+    if invite.is_expired:
+        invite.status = ChurchInvitation.Status.EXPIRED
+        invite.save(update_fields=['status'])
+        messages.error(request, "Cette invitation a expire.")
+        return redirect('pending_invitations')
+
+    invite.status = ChurchInvitation.Status.DECLINED
+    invite.declined_at = timezone.now()
+    invite.save(update_fields=['status', 'declined_at'])
+    _mark_invite_notifications_read(request.user, invite)
+    try:
+        log_audit(
+            actor=request.user,
+            church=invite.church,
+            action="invite_decline",
+            instance=invite,
+            metadata={"email": invite.email, "role": invite.role},
+        )
+    except Exception:
+        pass
+    notify_church_admins(
+        invite.church,
+        category="invite",
+        title="Invitation refusee",
+        body=f"{request.user.get_full_name() or request.user.username} a refuse l'invitation.",
+        link=reverse('manage_users'),
+        exclude=request.user,
+    )
+    if invite.invited_by and invite.invited_by != request.user:
+        notify_user(
+            invite.invited_by,
+            invite.church,
+            category="invite",
+            title="Invitation refusee",
+            body=f"{request.user.get_full_name() or request.user.username} a refuse l'invitation.",
+            link=reverse('manage_users'),
+        )
+    if _has_pending_invitations(request.user) or get_accessible_churches(request.user).exists():
+        messages.success(request, "Invitation refusee.")
+        return redirect('pending_invitations')
+
+    logout(request)
+    messages.success(request, "Invitation refusee. Vous avez ete deconnecte car votre compte n'a plus aucun acces actif.")
+    return redirect('home')
+
+
+@login_required
 def select_church(request):
     churches = get_accessible_churches(request.user)
     if not churches.exists():
         messages.warning(request, "Aucune église associée à votre compte.")
         return redirect('home')
 
-    if churches.count() == 1:
+    if not request.user.is_superuser:
+        if churches.count() > 1:
+            request.session.pop('active_church_id', None)
+            messages.error(
+                request,
+                "Votre compte est associe a plusieurs eglises actives. Contactez le superadministrateur.",
+            )
+            return redirect('home')
         church = churches.first()
         request.session['active_church_id'] = church.id
         return redirect('dashboard')
@@ -1581,8 +1729,11 @@ def manage_notifications(request):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
-    notifications = Notification.objects.filter(recipient=request.user).select_related('church')
     accessible_churches = get_accessible_churches(request.user)
+    notifications = Notification.objects.filter(
+        recipient=request.user,
+        church__in=accessible_churches,
+    ).select_related('church')
     church_filter = request.GET.get('church')
     if church_filter:
         notifications = notifications.filter(church_id=church_filter, church__in=accessible_churches)
@@ -1611,10 +1762,12 @@ def open_notification(request, pk):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
+    accessible_churches = get_accessible_churches(request.user)
     notification = get_object_or_404(
         Notification,
         pk=pk,
         recipient=request.user,
+        church__in=accessible_churches,
     )
     if not notification.is_read:
         notification.is_read = True
@@ -1635,11 +1788,12 @@ def mark_notification_read(request, pk):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
+    accessible_churches = get_accessible_churches(request.user)
     notification = get_object_or_404(
         Notification,
         pk=pk,
-        church=church,
         recipient=request.user,
+        church__in=accessible_churches,
     )
     if request.method == 'POST':
         notification.is_read = True
@@ -1654,10 +1808,11 @@ def mark_all_notifications_read(request):
     if not church:
         return redirect('select_church')
     if request.method == 'POST':
+        accessible_churches = get_accessible_churches(request.user)
         Notification.objects.filter(
-            church=church,
             recipient=request.user,
             is_read=False,
+            church__in=accessible_churches,
         ).update(is_read=True)
     return redirect('manage_notifications')
 

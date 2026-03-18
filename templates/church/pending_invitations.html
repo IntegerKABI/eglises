@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Invitations en attente{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4 p-lg-5">
+                    <h1 class="h4 mb-3">Invitations en attente</h1>
+                    <p class="text-muted mb-4">
+                        Votre compte n'est rattache a aucune eglise active pour le moment.
+                        Acceptez ou refusez une invitation pour continuer.
+                    </p>
+
+                    {% if invitations %}
+                    <div class="list-group">
+                        {% for invite in invitations %}
+                        <div class="list-group-item py-3">
+                            <div class="d-flex flex-column flex-md-row justify-content-between gap-3">
+                                <div>
+                                    <div class="fw-semibold">{{ invite.church.name }}</div>
+                                    <div class="text-muted small">
+                                        Role propose : {{ invite.get_role_display }}<br>
+                                        Expire le {{ invite.expires_at|date:"d/m/Y H:i" }}
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2 align-items-start">
+                                    <a href="{% url 'accept_invite' invite.token %}" class="btn btn-church btn-sm">
+                                        Voir l'invitation
+                                    </a>
+                                    <form method="post" action="{% url 'decline_invite' invite.token %}">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-outline-danger btn-sm">
+                                            Refuser
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-light border mb-0">
+                        Aucune invitation en attente n'est disponible pour votre compte.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

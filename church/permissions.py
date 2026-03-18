@@ -1,8 +1,10 @@
 from functools import wraps
 
 from django.contrib import messages
+from django.contrib.auth import logout
 from django.shortcuts import redirect
 
+from .membership_policy import get_pending_invitations_for_user
 from .models import Church, ChurchMembership
 from .tenancy import get_membership, get_selected_church
 
@@ -58,11 +60,11 @@ def get_capabilities_for_user(user, membership):
 
 
 def get_capabilities_for_request(request):
-    church = getattr(request, 'current_church', None)
+    church = getattr(request, "current_church", None)
     if church is None and request.user.is_authenticated:
         church = get_selected_church(request, prefetch_pages=True)
         request.current_church = church
-    membership = getattr(request, 'current_membership', None)
+    membership = getattr(request, "current_membership", None)
     if membership is None and request.user.is_authenticated and church:
         membership = get_membership(request.user, church)
         request.current_membership = membership
@@ -76,31 +78,48 @@ def require_capability(capability):
             if request.user.is_superuser and capability in ALL_CAPABILITIES:
                 return view_func(request, *args, **kwargs)
 
-            church = getattr(request, 'current_church', None)
+            church = getattr(request, "current_church", None)
             if church is None:
                 church = get_selected_church(request, prefetch_pages=True)
                 request.current_church = church
-            if not church:
-                messages.warning(request, "Sélectionnez une église pour continuer.")
-                return redirect('select_church')
-            if church.status in {Church.Status.SUSPENDED, Church.Status.ARCHIVED}:
-                messages.error(request, "Cette église est suspendue ou archivée.")
-                request.session.pop('active_church_id', None)
-                return redirect('select_church')
 
-            membership = getattr(request, 'current_membership', None)
+            if not church:
+                if request.user.is_superuser:
+                    messages.warning(request, "Selectionnez une eglise pour continuer.")
+                    return redirect("select_church")
+
+                if get_pending_invitations_for_user(request.user).exists():
+                    messages.info(
+                        request,
+                        "Consultez vos invitations en attente pour rejoindre une eglise.",
+                    )
+                    return redirect("pending_invitations")
+
+                logout(request)
+                messages.error(
+                    request,
+                    "Votre compte n'appartient a aucune eglise active et vous n'avez aucune invitation en attente. Contactez l'administration de l'eglise ou la plateforme.",
+                )
+                return redirect("home")
+
+            if church.status in {Church.Status.SUSPENDED, Church.Status.ARCHIVED}:
+                messages.error(request, "Cette eglise est suspendue ou archivee.")
+                request.session.pop("active_church_id", None)
+                return redirect("select_church")
+
+            membership = getattr(request, "current_membership", None)
             if membership is None:
                 membership = get_membership(request.user, church)
                 request.current_membership = membership
 
             if not membership:
-                messages.error(request, "Accès refusé. Aucun rôle défini pour cette église.")
-                return redirect('select_church')
+                messages.error(request, "Acces refuse. Aucun role defini pour cette eglise.")
+                return redirect("select_church")
 
             capabilities = get_capabilities_for_user(request.user, membership)
             if capability not in capabilities:
-                messages.error(request, "Accès refusé pour ce rôle.")
-                return redirect('dashboard')
+                messages.error(request, "Acces refuse pour ce role.")
+                return redirect("dashboard")
 
             return view_func(request, *args, **kwargs)
 

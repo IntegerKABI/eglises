@@ -34,7 +34,7 @@ def church_context(request):
     can_view_audit = False
     can_switch_church = False
     if request.user.is_authenticated:
-        can_switch_church = get_accessible_church_count(request) > 1
+        can_switch_church = request.user.is_superuser and get_accessible_church_count(request) > 1
         if request.user.is_superuser:
             can_view_audit = True
         else:
