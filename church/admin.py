@@ -30,8 +30,8 @@ from .models import (
 
 @admin.register(Church)
 class ChurchAdmin(admin.ModelAdmin):
-    list_display = ['name', 'city', 'email', 'status', 'created_at']
-    list_filter = ['status', 'city', 'country']
+    list_display = ['name', 'plan', 'city', 'email', 'status', 'created_at']
+    list_filter = ['plan', 'status', 'city', 'country']
     search_fields = ['name', 'city', 'email']
     prepopulated_fields = {'slug': ('name',)}
     exclude = ['is_active']

@@ -23,6 +23,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.http import JsonResponse, Http404
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
@@ -82,6 +83,7 @@ from .notifications import (
     notify_user_role_change,
 )
 from .audit import log_audit
+from .limits import enforce_limits_for_model, get_plan_usage
 from .tenancy import get_accessible_churches, get_membership, get_selected_church
 
 
@@ -226,6 +228,25 @@ def _handle_church_form(
             if obj.pk is None and getattr(obj, 'created_by_id', None) is None and request.user.is_authenticated:
                 obj.created_by = request.user
             is_created = obj.pk is None
+            try:
+                enforce_limits_for_model(
+                    church,
+                    obj.__class__,
+                    instance=instance or obj,
+                    form=form,
+                )
+            except ValidationError as exc:
+                form.add_error(None, exc)
+                context = {
+                    'church': church,
+                    'form': form,
+                    'title': title,
+                }
+                if object_name and instance is not None:
+                    context[object_name] = instance
+                if is_ajax(request):
+                    return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+                return render(request, template_name, context)
             obj.save()
             if hasattr(form, 'save_m2m'):
                 form.save_m2m()
@@ -575,6 +596,17 @@ def dashboard(request):
         'total_members': church.members.filter(is_active=True).count(),
         'total_events': church.events.filter(is_active=True).count(),
         'total_sermons': church.sermons.filter(is_active=True).count(),
+        'plan_usage': get_plan_usage(church),
+        'plan_member_limit': church.get_plan_limit('members'),
+        'plan_event_limit': church.get_plan_limit('events'),
+        'plan_storage_limit_mb': church.get_plan_limit('storage_mb'),
+        'plan_member_limit_display': church.get_plan_limit('members') if church.get_plan_limit('members') is not None else 'Illimite',
+        'plan_event_limit_display': church.get_plan_limit('events') if church.get_plan_limit('events') is not None else 'Illimite',
+        'plan_storage_limit_display': (
+            f"{church.get_plan_limit('storage_mb')} Mo"
+            if church.get_plan_limit('storage_mb') is not None
+            else 'Illimite'
+        ),
         'upcoming_events': church.events.filter(
             is_active=True,
             event_date__gte=timezone.now().date()
@@ -596,21 +628,26 @@ def church_settings(request):
     if request.method == 'POST':
         form = ChurchForm(request.POST, request.FILES, instance=church)
         if form.is_valid():
-            form.save()
             try:
-                log_audit(
-                    actor=request.user,
-                    church=church,
-                    action="settings_update",
-                    instance=church,
-                    metadata={"section": "church_settings"},
-                )
-            except Exception:
-                pass
-            if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Paramètres mis à jour avec succès !'})
-            messages.success(request, 'Paramètres mis à jour avec succès !')
-            return redirect('church_settings')
+                enforce_limits_for_model(church, Church, instance=church, form=form)
+            except ValidationError as exc:
+                form.add_error(None, exc)
+            else:
+                form.save()
+                try:
+                    log_audit(
+                        actor=request.user,
+                        church=church,
+                        action="settings_update",
+                        instance=church,
+                        metadata={"section": "church_settings"},
+                    )
+                except Exception:
+                    pass
+                if is_ajax(request):
+                    return JsonResponse({'success': True, 'message': 'Paramètres mis à jour avec succès !'})
+                messages.success(request, 'Paramètres mis à jour avec succès !')
+                return redirect('church_settings')
         elif is_ajax(request):
             return JsonResponse({'success': False, 'errors': form.errors}, status=400)
     else:
