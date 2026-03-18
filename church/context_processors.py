@@ -11,9 +11,13 @@ sans qu'on ait besoin de les passer manuellement dans chaque vue.
 =================================================================
 """
 
-from .models import ChurchMembership, Notification, SiteSettings
-from .permissions import get_capabilities_for_request
-from .tenancy import get_accessible_church_count
+from .models import Notification, SiteSettings
+from .permissions import (
+    CAP_SWITCH_CHURCH,
+    CAP_VIEW_AUDIT,
+    get_capabilities_for_request,
+    user_has_any_capability,
+)
 
 
 def church_context(request):
@@ -31,18 +35,8 @@ def church_context(request):
     membership = getattr(request, 'current_membership', None)
     menu_pages = getattr(church, 'menu_pages', None) if church else None
     capabilities = get_capabilities_for_request(request)
-    can_view_audit = False
-    can_switch_church = False
-    if request.user.is_authenticated:
-        can_switch_church = request.user.is_superuser and get_accessible_church_count(request) > 1
-        if request.user.is_superuser:
-            can_view_audit = True
-        else:
-            can_view_audit = ChurchMembership.objects.filter(
-                user=request.user,
-                role=ChurchMembership.Role.ADMIN,
-                is_active=True,
-            ).exists()
+    can_view_audit = user_has_any_capability(request.user, CAP_VIEW_AUDIT)
+    can_switch_church = user_has_any_capability(request.user, CAP_SWITCH_CHURCH)
     unread_notifications_count = 0
     if request.user.is_authenticated:
         unread_notifications_count = Notification.objects.filter(

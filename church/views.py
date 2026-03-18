@@ -74,7 +74,9 @@ from .permissions import (
     CAP_MANAGE_SERMONS,
     CAP_MANAGE_SITE_SETTINGS,
     CAP_MANAGE_USERS,
+    CAP_VIEW_AUDIT,
     CAP_VIEW_DASHBOARD,
+    get_churches_for_capability,
     require_capability,
 )
 from .notifications import (
@@ -1818,20 +1820,12 @@ def mark_all_notifications_read(request):
 
 
 @login_required
+@require_capability(CAP_VIEW_AUDIT)
 def manage_audit_logs(request):
-    if request.user.is_superuser:
-        churches = Church.objects.all()
-        logs = AuditLog.objects.select_related('actor', 'church')
-    else:
-        churches = Church.objects.filter(
-            memberships__user=request.user,
-            memberships__role=ChurchMembership.Role.ADMIN,
-            memberships__is_active=True,
-        ).distinct()
-        if not churches.exists():
-            messages.error(request, "Accès refusé.")
-            return redirect('dashboard')
-        logs = AuditLog.objects.select_related('actor', 'church').filter(church__in=churches)
+    churches = get_churches_for_capability(request.user, CAP_VIEW_AUDIT)
+    logs = AuditLog.objects.select_related('actor', 'church')
+    if not request.user.is_superuser:
+        logs = logs.filter(church__in=churches)
 
     church_filter = request.GET.get('church')
     if church_filter == 'platform' and request.user.is_superuser:

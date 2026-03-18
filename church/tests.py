@@ -7,6 +7,13 @@ from django.utils import timezone
 
 from .forms import ChurchInvitationForm
 from .models import Church, ChurchInvitation, ChurchMembership
+from .permissions import (
+    CAP_MANAGE_EVENTS,
+    CAP_SWITCH_CHURCH,
+    CAP_VIEW_AUDIT,
+    get_churches_for_capability,
+    user_has_any_capability,
+)
 
 
 TEST_STORAGES = {
@@ -252,3 +259,71 @@ class PendingInvitationWorkflowTests(TestCase):
         self.assertEqual(self.invite.status, ChurchInvitation.Status.DECLINED)
         self.assertIsNotNone(self.invite.declined_at)
         self.assertIsNone(self.client.session.get("_auth_user_id"))
+
+
+@override_settings(STORAGES=TEST_STORAGES)
+class CapabilityConsistencyTests(TestCase):
+    def setUp(self):
+        self.user_model = get_user_model()
+        self.admin_user = self.user_model.objects.create_user(
+            username="audit-admin",
+            email="audit-admin@example.com",
+            password="StrongPass123!",
+        )
+        self.staff_user = self.user_model.objects.create_user(
+            username="audit-staff",
+            email="audit-staff@example.com",
+            password="StrongPass123!",
+        )
+        self.superuser = self.user_model.objects.create_superuser(
+            username="platform-root",
+            email="root@example.com",
+            password="StrongPass123!",
+        )
+        self.church_one = Church.objects.create(name="Audit Church")
+        self.church_two = Church.objects.create(name="Second Audit Church")
+        ChurchMembership.objects.create(
+            user=self.admin_user,
+            church=self.church_one,
+            role=ChurchMembership.Role.ADMIN,
+            is_active=True,
+        )
+        ChurchMembership.objects.create(
+            user=self.staff_user,
+            church=self.church_one,
+            role=ChurchMembership.Role.STAFF,
+            is_active=True,
+        )
+
+    def test_admin_capability_helpers_match_audit_access(self):
+        self.assertTrue(user_has_any_capability(self.admin_user, CAP_VIEW_AUDIT))
+        self.assertEqual(
+            list(get_churches_for_capability(self.admin_user, CAP_VIEW_AUDIT)),
+            [self.church_one],
+        )
+
+    def test_staff_cannot_view_audit_but_keeps_role_capabilities(self):
+        self.assertFalse(user_has_any_capability(self.staff_user, CAP_VIEW_AUDIT))
+        self.assertTrue(user_has_any_capability(self.staff_user, CAP_MANAGE_EVENTS))
+        self.assertFalse(
+            get_churches_for_capability(self.staff_user, CAP_VIEW_AUDIT).exists()
+        )
+
+    def test_superuser_switch_church_and_audit_helpers_share_same_source(self):
+        self.assertTrue(user_has_any_capability(self.superuser, CAP_VIEW_AUDIT))
+        self.assertTrue(user_has_any_capability(self.superuser, CAP_SWITCH_CHURCH))
+
+    def test_audit_route_denies_staff_and_allows_admin(self):
+        self.client.force_login(self.staff_user)
+        staff_response = self.client.get(reverse("manage_audit_logs"))
+        self.assertRedirects(
+            staff_response,
+            reverse("dashboard"),
+            fetch_redirect_response=False,
+        )
+
+        self.client.force_login(self.admin_user)
+        self.client.session["active_church_id"] = self.church_one.id
+        self.client.session.save()
+        admin_response = self.client.get(reverse("manage_audit_logs"))
+        self.assertEqual(admin_response.status_code, 200)
