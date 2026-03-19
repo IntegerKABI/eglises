@@ -1,7 +1,11 @@
+from unittest.mock import patch
+
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 
 from church.forms import (
     ChurchInvitationForm,
+    ChurchMembershipAssignForm,
     ChurchUserCreateForm,
     EventForm,
     InviteSignupForm,
@@ -39,6 +43,47 @@ class ChurchFormTests(SaaSTestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn("mots de passe", str(form.errors).lower())
+
+    def test_church_user_create_form_rolls_back_user_when_membership_creation_fails(self):
+        church = self.create_church()
+        form = ChurchUserCreateForm(
+            data={
+                "username": "rollback-user",
+                "email": "rollback-user@example.com",
+                "first_name": "Rollback",
+                "last_name": "User",
+                "phone": "+243810000200",
+                "is_active": True,
+                "role": ChurchMembership.Role.STAFF,
+                "password1": "StrongPass123!",
+                "password2": "StrongPass123!",
+            }
+        )
+
+        self.assertTrue(form.is_valid())
+        with patch("church.forms.ChurchMembership.objects.create", side_effect=RuntimeError("db error")):
+            with self.assertRaises(RuntimeError):
+                form.save(church=church)
+
+        self.assertFalse(get_user_model().objects.filter(username="rollback-user").exists())
+
+    def test_assign_form_rolls_back_when_membership_creation_fails(self):
+        church = self.create_church()
+        user = self.create_user(username="assign-rollback", email="assign-rollback@example.com")
+        form = ChurchMembershipAssignForm(
+            data={
+                "identifier": user.username,
+                "role": ChurchMembership.Role.SECRETARY,
+            },
+            church=church,
+        )
+
+        self.assertTrue(form.is_valid())
+        with patch("church.forms.ChurchMembership.objects.create", side_effect=RuntimeError("db error")):
+            with self.assertRaises(RuntimeError):
+                form.save(church=church)
+
+        self.assertFalse(ChurchMembership.objects.filter(user=user, church=church).exists())
 
     def test_invite_signup_form_rejects_existing_email(self):
         self.create_user(email="existing@example.com")

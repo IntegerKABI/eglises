@@ -173,7 +173,7 @@ class ChurchUserCreateForm(forms.ModelForm):
         with transaction.atomic():
             enforce_limits_for_model(church, ChurchMembership)
             user.save()
-            ChurchMembership.objects.create(
+            self.membership = ChurchMembership.objects.create(
                 user=user,
                 church=church,
                 role=self.cleaned_data['role'],
@@ -216,23 +216,32 @@ class ChurchMembershipAssignForm(forms.Form):
     def save(self, church):
         if not self.user:
             raise ValidationError("Utilisateur introuvable.")
-        membership = ChurchMembership.objects.filter(user=self.user, church=church).first()
-        if membership:
-            if not membership.is_active:
-                enforce_limits_for_model(church, ChurchMembership)
-            membership.role = self.cleaned_data['role']
-            membership.is_active = True
-            membership.save(update_fields=['role', 'is_active'])
-            self.created = False
-            return membership
-        self.created = True
-        enforce_limits_for_model(church, ChurchMembership)
-        return ChurchMembership.objects.create(
-            user=self.user,
-            church=church,
-            role=self.cleaned_data['role'],
-            is_active=True,
-        )
+
+        with transaction.atomic():
+            membership = (
+                ChurchMembership.objects.select_for_update()
+                .filter(user=self.user, church=church)
+                .first()
+            )
+            if membership:
+                if not membership.is_active:
+                    enforce_limits_for_model(church, ChurchMembership)
+                membership.role = self.cleaned_data['role']
+                membership.is_active = True
+                membership.save(update_fields=['role', 'is_active'])
+                self.created = False
+                self.membership = membership
+                return membership
+
+            self.created = True
+            enforce_limits_for_model(church, ChurchMembership)
+            self.membership = ChurchMembership.objects.create(
+                user=self.user,
+                church=church,
+                role=self.cleaned_data['role'],
+                is_active=True,
+            )
+            return self.membership
 
 
 class ChurchMembershipUpdateForm(forms.ModelForm):

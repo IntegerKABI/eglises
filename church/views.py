@@ -1,4 +1,4 @@
-"""
+﻿"""
 =================================================================
 VUES — Logique de chaque page
 =================================================================
@@ -224,6 +224,16 @@ def _mark_invite_notifications_read(user, invite):
 
 def _has_pending_invitations(user):
     return get_pending_invitations_for_user(user).exists()
+
+
+def _schedule_safe_after_commit(callback):
+    def wrapped():
+        try:
+            callback()
+        except Exception:
+            pass
+
+    transaction.on_commit(wrapped)
 
 
 def _require_church(request):
@@ -1254,31 +1264,41 @@ def add_user(request):
     if request.method == 'POST':
         form = ChurchUserCreateForm(request.POST)
         if form.is_valid():
-            user = form.save(church=church)
             try:
-                log_audit(
-                    actor=request.user,
-                    church=church,
-                    action="membership_create",
-                    object_type="ChurchMembership",
-                    object_id=str(user.pk),
-                    object_repr=str(user),
-                    metadata={"role": form.cleaned_data['role']},
-                )
-            except Exception:
-                pass
-            notify_user_role_change(
-                church,
-                user,
-                title="Accès accordé",
-                body=f"Vous avez été ajouté(e) comme {form.cleaned_data['role']} pour {church.name}.",
-                link=reverse('dashboard'),
-                actor=request.user,
-            )
-            if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Utilisateur créé !', 'redirect': reverse('manage_users')})
-            messages.success(request, 'Utilisateur créé !')
-            return redirect('manage_users')
+                with transaction.atomic():
+                    user = form.save(church=church)
+                    role = form.cleaned_data['role']
+
+                    def after_commit():
+                        try:
+                            log_audit(
+                                actor=request.user,
+                                church=church,
+                                action="membership_create",
+                                object_type="ChurchMembership",
+                                object_id=str(user.pk),
+                                object_repr=str(user),
+                                metadata={"role": role},
+                            )
+                        except Exception:
+                            pass
+                        notify_user_role_change(
+                            church,
+                            user,
+                            title="Acc?s accord?",
+                            body=f"Vous avez ?t? ajout?(e) comme {role} pour {church.name}.",
+                            link=reverse('dashboard'),
+                            actor=request.user,
+                        )
+
+                    _schedule_safe_after_commit(after_commit)
+            except ValidationError as exc:
+                form.add_error(None, exc)
+            else:
+                if is_ajax(request):
+                    return JsonResponse({'success': True, 'message': 'Utilisateur cr?? !', 'redirect': reverse('manage_users')})
+                messages.success(request, 'Utilisateur cr?? !')
+                return redirect('manage_users')
         if is_ajax(request):
             return JsonResponse({'success': False, 'errors': form.errors}, status=400)
     else:
@@ -1301,30 +1321,41 @@ def assign_user(request):
     if request.method == 'POST':
         form = ChurchMembershipAssignForm(request.POST, church=church)
         if form.is_valid():
-            membership = form.save(church=church)
-            action_title = "Accès accordé" if getattr(form, 'created', False) else "Rôle mis à jour"
             try:
-                log_audit(
-                    actor=request.user,
-                    church=church,
-                    action="membership_assign" if getattr(form, 'created', False) else "membership_update",
-                    instance=membership,
-                    metadata={"role": membership.role},
-                )
-            except Exception:
-                pass
-            notify_user_role_change(
-                church,
-                membership.user,
-                title=action_title,
-                body=f"Votre rôle pour {church.name} est maintenant {membership.get_role_display()}",
-                link=reverse('dashboard'),
-                actor=request.user,
-            )
-            if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Utilisateur assigné !', 'redirect': reverse('manage_users')})
-            messages.success(request, 'Utilisateur assigné !')
-            return redirect('manage_users')
+                with transaction.atomic():
+                    membership = form.save(church=church)
+                    created = getattr(form, 'created', False)
+                    action_title = "Acc?s accord?" if created else "R?le mis ? jour"
+                    audit_action = "membership_assign" if created else "membership_update"
+
+                    def after_commit():
+                        try:
+                            log_audit(
+                                actor=request.user,
+                                church=church,
+                                action=audit_action,
+                                instance=membership,
+                                metadata={"role": membership.role},
+                            )
+                        except Exception:
+                            pass
+                        notify_user_role_change(
+                            church,
+                            membership.user,
+                            title=action_title,
+                            body=f"Votre r?le pour {church.name} est maintenant {membership.get_role_display()}",
+                            link=reverse('dashboard'),
+                            actor=request.user,
+                        )
+
+                    _schedule_safe_after_commit(after_commit)
+            except ValidationError as exc:
+                form.add_error(None, exc)
+            else:
+                if is_ajax(request):
+                    return JsonResponse({'success': True, 'message': 'Utilisateur assign? !', 'redirect': reverse('manage_users')})
+                messages.success(request, 'Utilisateur assign? !')
+                return redirect('manage_users')
         if is_ajax(request):
             return JsonResponse({'success': False, 'errors': form.errors}, status=400)
     else:
@@ -1361,7 +1392,7 @@ def invite_user(request):
             notify_church_admins(
                 church,
                 category="invite",
-                title="Invitation envoyée",
+                title="Invitation envoy?e",
                 body=f"{invite.email} - {invite.get_role_display()}",
                 link=reverse('manage_users'),
                 exclude=request.user,
@@ -1373,7 +1404,7 @@ def invite_user(request):
                     invited_user,
                     church,
                     category="invite",
-                    title="Invitation à rejoindre l'église",
+                    title="Invitation ? rejoindre l'?glise",
                     body=f"Invitation pour {church.name} ({invite.get_role_display()}).",
                     link=reverse('accept_invite', args=[invite.token]),
                 )
@@ -1382,12 +1413,12 @@ def invite_user(request):
                 _send_invite_email(request, invite)
             except Exception:
                 email_error = True
-                messages.error(request, "Invitation créée, mais l'email n'a pas pu être envoyé.")
+                messages.error(request, "Invitation cr??e, mais l'email n'a pas pu ?tre envoy?.")
             if is_ajax(request):
-                message = "Invitation envoyée." if not email_error else "Invitation créée, email non envoyé."
+                message = "Invitation envoy?e." if not email_error else "Invitation cr??e, email non envoy?."
                 return JsonResponse({'success': True, 'message': message, 'redirect': reverse('manage_users')})
             if not email_error:
-                messages.success(request, "Invitation envoyée.")
+                messages.success(request, "Invitation envoy?e.")
             return redirect('manage_users')
         if is_ajax(request):
             return JsonResponse({'success': False, 'errors': form.errors}, status=400)
@@ -1427,12 +1458,12 @@ def revoke_invite(request, pk):
         notify_church_admins(
             church,
             category="invite",
-            title="Invitation révoquée",
+            title="Invitation r?voqu?e",
             body=f"{invite.email} - {invite.get_role_display()}",
             link=reverse('manage_users'),
             exclude=request.user,
         )
-        messages.success(request, "Invitation révoquée.")
+        messages.success(request, "Invitation r?voqu?e.")
     return redirect('manage_users')
 
 
@@ -1461,12 +1492,12 @@ def resend_invite(request, pk):
             notify_church_admins(
                 church,
                 category="invite",
-                title="Invitation renvoyée",
+                title="Invitation renvoy?e",
                 body=f"{invite.email} - {invite.get_role_display()}",
                 link=reverse('manage_users'),
                 exclude=request.user,
             )
-            messages.success(request, "Invitation renvoyée.")
+            messages.success(request, "Invitation renvoy?e.")
         except Exception:
             messages.error(request, "Impossible d'envoyer l'email pour le moment.")
     return redirect('manage_users')
@@ -1478,47 +1509,59 @@ def toggle_membership(request, pk):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
-    membership = get_object_or_404(ChurchMembership, pk=pk, church=church)
+    membership = get_object_or_404(ChurchMembership.objects.select_related('user'), pk=pk, church=church)
     if request.method != 'POST':
         return redirect('manage_users')
     action = request.POST.get('action')
     if action not in {'activate', 'deactivate'}:
         messages.error(request, "Action invalide.")
         return redirect('manage_users')
-    if action == 'deactivate' and membership.is_active:
-        if membership.role == ChurchMembership.Role.ADMIN and not _has_other_admins(church, exclude_membership=membership):
-            messages.error(request, "Au moins un administrateur actif est requis.")
-            return redirect('manage_users')
-        membership.is_active = False
-    elif action == 'activate':
-        if not membership.is_active:
-            try:
-                enforce_limits_for_model(church, ChurchMembership)
-            except ValidationError as exc:
-                messages.error(request, exc.messages[0])
-                return redirect('manage_users')
-        membership.is_active = True
-    membership.save(update_fields=['is_active'])
-    status_label = "actif" if membership.is_active else "inactif"
+
     try:
-        log_audit(
-            actor=request.user,
-            church=church,
-            action="membership_status",
-            instance=membership,
-            metadata={"active": membership.is_active},
-        )
-    except Exception:
-        pass
-    notify_user_role_change(
-        church,
-        membership.user,
-        title="Statut utilisateur mis à jour",
-        body=f"Votre accès est maintenant {status_label} pour {church.name}.",
-        link=reverse('dashboard'),
-        actor=request.user,
-    )
-    messages.success(request, "Statut utilisateur mis à jour.")
+        with transaction.atomic():
+            membership = get_object_or_404(
+                ChurchMembership.objects.select_for_update().select_related('user'),
+                pk=pk,
+                church=church,
+            )
+            if action == 'deactivate' and membership.is_active:
+                if membership.role == ChurchMembership.Role.ADMIN and not _has_other_admins(church, exclude_membership=membership):
+                    messages.error(request, "Au moins un administrateur actif est requis.")
+                    return redirect('manage_users')
+                membership.is_active = False
+            elif action == 'activate':
+                if not membership.is_active:
+                    enforce_limits_for_model(church, ChurchMembership)
+                membership.is_active = True
+            membership.save(update_fields=['is_active'])
+            status_label = "actif" if membership.is_active else "inactif"
+
+            def after_commit():
+                try:
+                    log_audit(
+                        actor=request.user,
+                        church=church,
+                        action="membership_status",
+                        instance=membership,
+                        metadata={"active": membership.is_active},
+                    )
+                except Exception:
+                    pass
+                notify_user_role_change(
+                    church,
+                    membership.user,
+                    title="Statut utilisateur mis ? jour",
+                    body=f"Votre acc?s est maintenant {status_label} pour {church.name}.",
+                    link=reverse('dashboard'),
+                    actor=request.user,
+                )
+
+            _schedule_safe_after_commit(after_commit)
+    except ValidationError as exc:
+        messages.error(request, exc.messages[0])
+        return redirect('manage_users')
+
+    messages.success(request, "Statut utilisateur mis ? jour.")
     return redirect('manage_users')
 
 
@@ -1531,7 +1574,7 @@ def transfer_admin(request):
 
     current_membership = get_membership(request.user, church)
     if not current_membership or current_membership.role != ChurchMembership.Role.ADMIN or not current_membership.is_active:
-        messages.error(request, "Transfert réservé aux administrateurs actifs.")
+        messages.error(request, "Transfert r?serv? aux administrateurs actifs.")
         return redirect('manage_users')
 
     form = TransferAdminForm(
@@ -1543,49 +1586,68 @@ def transfer_admin(request):
         messages.error(request, "Aucun autre membre actif disponible pour le transfert.")
         return redirect('manage_users')
 
-    if request.method == 'POST' and form.is_valid():
-        target = form.cleaned_data['membership']
-        with transaction.atomic():
-            target.role = ChurchMembership.Role.ADMIN
-            target.is_active = True
-            target.save(update_fields=['role', 'is_active'])
-            if current_membership.pk != target.pk:
-                current_membership.role = ChurchMembership.Role.STAFF
-                current_membership.save(update_fields=['role'])
-        try:
-            log_audit(
-                actor=request.user,
-                church=church,
-                action="membership_transfer_admin",
-                instance=target,
-                metadata={"from_user": current_membership.user_id},
-            )
-        except Exception:
-            pass
-        notify_user_role_change(
-            church,
-            target.user,
-            title="Administration transférée",
-            body=f"Vous êtes maintenant administrateur de {church.name}.",
-            link=reverse('manage_users'),
-            actor=request.user,
-        )
-        if current_membership.user != target.user:
-            notify_user_role_change(
-                church,
-                current_membership.user,
-                title="Administration transférée",
-                body=f"Votre rôle est maintenant {current_membership.get_role_display()} pour {church.name}.",
-                link=reverse('manage_users'),
-                actor=request.user,
-            )
-        messages.success(request, "Administrateur transféré.")
-        return redirect('manage_users')
+    if request.method == 'POST':
+        if form.is_valid():
+            target_id = form.cleaned_data['membership'].pk
+            with transaction.atomic():
+                current_membership = get_object_or_404(
+                    ChurchMembership.objects.select_for_update().select_related('user'),
+                    pk=current_membership.pk,
+                    church=church,
+                )
+                target = get_object_or_404(
+                    ChurchMembership.objects.select_for_update().select_related('user'),
+                    pk=target_id,
+                    church=church,
+                )
+                target.role = ChurchMembership.Role.ADMIN
+                target.is_active = True
+                target.save(update_fields=['role', 'is_active'])
+                if current_membership.pk != target.pk:
+                    current_membership.role = ChurchMembership.Role.STAFF
+                    current_membership.save(update_fields=['role'])
+
+                def after_commit():
+                    try:
+                        log_audit(
+                            actor=request.user,
+                            church=church,
+                            action="membership_transfer_admin",
+                            instance=target,
+                            metadata={"from_user": current_membership.user_id},
+                        )
+                    except Exception:
+                        pass
+                    notify_user_role_change(
+                        church,
+                        target.user,
+                        title="Administration transf?r?e",
+                        body=f"Vous ?tes maintenant administrateur de {church.name}.",
+                        link=reverse('manage_users'),
+                        actor=request.user,
+                    )
+                    if current_membership.user != target.user:
+                        notify_user_role_change(
+                            church,
+                            current_membership.user,
+                            title="Administration transf?r?e",
+                            body=f"Votre r?le est maintenant {current_membership.get_role_display()} pour {church.name}.",
+                            link=reverse('manage_users'),
+                            actor=request.user,
+                        )
+
+                _schedule_safe_after_commit(after_commit)
+            if is_ajax(request):
+                return JsonResponse({'success': True, 'message': 'Administrateur transf?r?.', 'redirect': reverse('manage_users')})
+            messages.success(request, "Administrateur transf?r?.")
+            return redirect('manage_users')
+        if is_ajax(request):
+            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
 
     return render(request, 'admin_dashboard/transfer_admin.html', {
         'church': church,
         'form': form,
-        'title': "Transférer l'administration",
+        'title': "Transf?rer l'administration",
     })
 
 
@@ -1602,47 +1664,55 @@ def edit_membership(request, pk):
     if request.method == 'POST':
         form = ChurchMembershipUpdateForm(request.POST, instance=membership)
         if form.is_valid():
-            if not old_active and form.cleaned_data.get('is_active'):
-                try:
-                    enforce_limits_for_model(church, ChurchMembership)
-                except ValidationError as exc:
-                    form.add_error(None, exc)
-                    if is_ajax(request):
-                        return JsonResponse({'success': False, 'errors': form.errors}, status=400)
-                    return render(request, 'admin_dashboard/membership_form.html', {
-                        'church': church,
-                        'form': form,
-                        'title': "Modifier un utilisateur",
-                        'membership': membership,
-                    })
-            form.save()
-            if membership.role != old_role or membership.is_active != old_active:
-                status_label = "actif" if membership.is_active else "inactif"
-                try:
-                    log_audit(
-                        actor=request.user,
+            try:
+                with transaction.atomic():
+                    membership = get_object_or_404(
+                        ChurchMembership.objects.select_for_update().select_related('user'),
+                        pk=pk,
                         church=church,
-                        action="membership_update",
-                        instance=membership,
-                        metadata={
-                            "role": membership.role,
-                            "active": membership.is_active,
-                        },
                     )
-                except Exception:
-                    pass
-                notify_user_role_change(
-                    church,
-                    membership.user,
-                    title="Rôle mis à jour",
-                    body=f"Rôle: {membership.get_role_display()} (statut: {status_label}).",
-                    link=reverse('manage_users'),
-                    actor=request.user,
-                )
-            if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Rôle mis à jour !', 'redirect': reverse('manage_users')})
-            messages.success(request, 'Rôle mis à jour !')
-            return redirect('manage_users')
+                    old_role = membership.role
+                    old_active = membership.is_active
+                    form = ChurchMembershipUpdateForm(request.POST, instance=membership)
+                    if not form.is_valid():
+                        raise ValidationError(form.errors)
+                    if not old_active and form.cleaned_data.get('is_active'):
+                        enforce_limits_for_model(church, ChurchMembership)
+                    membership = form.save()
+                    if membership.role != old_role or membership.is_active != old_active:
+                        status_label = "actif" if membership.is_active else "inactif"
+
+                        def after_commit():
+                            try:
+                                log_audit(
+                                    actor=request.user,
+                                    church=church,
+                                    action="membership_update",
+                                    instance=membership,
+                                    metadata={
+                                        "role": membership.role,
+                                        "active": membership.is_active,
+                                    },
+                                )
+                            except Exception:
+                                pass
+                            notify_user_role_change(
+                                church,
+                                membership.user,
+                                title="R?le mis ? jour",
+                                body=f"R?le: {membership.get_role_display()} (statut: {status_label}).",
+                                link=reverse('manage_users'),
+                                actor=request.user,
+                            )
+
+                        _schedule_safe_after_commit(after_commit)
+            except ValidationError as exc:
+                form.add_error(None, exc)
+            else:
+                if is_ajax(request):
+                    return JsonResponse({'success': True, 'message': 'R?le mis ? jour !', 'redirect': reverse('manage_users')})
+                messages.success(request, 'R?le mis ? jour !')
+                return redirect('manage_users')
         if is_ajax(request):
             return JsonResponse({'success': False, 'errors': form.errors}, status=400)
     else:

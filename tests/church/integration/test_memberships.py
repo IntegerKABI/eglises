@@ -80,6 +80,29 @@ class MembershipIntegrationTests(SaaSTestCase):
         self.assertEqual(current_membership.role, ChurchMembership.Role.STAFF)
         self.assertEqual(target_membership.role, ChurchMembership.Role.ADMIN)
 
+    def test_transfer_admin_returns_json_for_ajax_requests(self):
+        target_membership = self.add_membership(self.target, self.church, role=ChurchMembership.Role.STAFF)
+
+        response = self.client.post(
+            reverse("transfer_admin"),
+            {"membership": target_membership.pk},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        current_membership = ChurchMembership.objects.get(user=self.admin, church=self.church)
+        target_membership.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertJSONEqual(
+            response.content,
+            {
+                "success": True,
+                "message": "Administrateur transf?r?.",
+                "redirect": reverse("manage_users"),
+            },
+        )
+        self.assertEqual(current_membership.role, ChurchMembership.Role.STAFF)
+        self.assertEqual(target_membership.role, ChurchMembership.Role.ADMIN)
+
     def test_edit_membership_updates_role(self):
         membership = self.add_membership(self.other, self.church, role=ChurchMembership.Role.STAFF)
 
