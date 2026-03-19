@@ -100,17 +100,35 @@ CHURCH_PLAN_LIMITS = {
     "starter": {
         "members": 200,
         "events": 50,
+        "sermons": 100,
+        "pages": 12,
+        "users": 5,
+        "pending_invitations": 10,
         "storage_mb": 512,
+        "message_retention_days": 90,
+        "notification_retention_days": 30,
     },
     "growth": {
         "members": 1000,
         "events": 300,
+        "sermons": 500,
+        "pages": 40,
+        "users": 20,
+        "pending_invitations": 50,
         "storage_mb": 2048,
+        "message_retention_days": 180,
+        "notification_retention_days": 90,
     },
     "scale": {
         "members": None,
         "events": None,
+        "sermons": None,
+        "pages": None,
+        "users": None,
+        "pending_invitations": None,
         "storage_mb": 10240,
+        "message_retention_days": 365,
+        "notification_retention_days": 180,
     },
 }
 
@@ -217,11 +235,47 @@ class Church(models.Model):
         verbose_name="Limite evenements personnalisee",
         help_text="Laissez vide pour utiliser la limite du plan.",
     )
+    max_sermons_override = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Limite predications personnalisee",
+        help_text="Laissez vide pour utiliser la limite du plan.",
+    )
+    max_pages_override = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Limite pages personnalisee",
+        help_text="Laissez vide pour utiliser la limite du plan.",
+    )
+    max_users_override = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Limite utilisateurs personnalisee",
+        help_text="Laissez vide pour utiliser la limite du plan.",
+    )
+    max_pending_invitations_override = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Limite invitations en attente personnalisee",
+        help_text="Laissez vide pour utiliser la limite du plan.",
+    )
     max_storage_mb_override = models.PositiveIntegerField(
         null=True,
         blank=True,
         verbose_name="Limite stockage personnalisee (Mo)",
         help_text="Laissez vide pour utiliser la limite du plan.",
+    )
+    message_retention_days_override = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Retention messages personnalisee (jours)",
+        help_text="Laissez vide pour utiliser la retention du plan.",
+    )
+    notification_retention_days_override = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Retention notifications personnalisee (jours)",
+        help_text="Laissez vide pour utiliser la retention du plan.",
     )
 
     status = models.CharField(
@@ -263,7 +317,13 @@ class Church(models.Model):
         override_map = {
             "members": self.max_members_override,
             "events": self.max_events_override,
+            "sermons": self.max_sermons_override,
+            "pages": self.max_pages_override,
+            "users": self.max_users_override,
+            "pending_invitations": self.max_pending_invitations_override,
             "storage_mb": self.max_storage_mb_override,
+            "message_retention_days": self.message_retention_days_override,
+            "notification_retention_days": self.notification_retention_days_override,
         }
         override = override_map.get(resource)
         if override is not None:

@@ -104,10 +104,64 @@
             </div>
             <div class="col-md-4">
                 <div class="border rounded-3 p-3 h-100">
+                    <div class="text-muted small text-uppercase">Predications</div>
+                    <div class="fs-4 fw-semibold mt-2">
+                        {{ plan_usage.sermons }}
+                        <span class="text-muted fs-6">/ {{ plan_sermon_limit_display }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="border rounded-3 p-3 h-100">
+                    <div class="text-muted small text-uppercase">Pages</div>
+                    <div class="fs-4 fw-semibold mt-2">
+                        {{ plan_usage.pages }}
+                        <span class="text-muted fs-6">/ {{ plan_page_limit_display }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="border rounded-3 p-3 h-100">
+                    <div class="text-muted small text-uppercase">Utilisateurs</div>
+                    <div class="fs-4 fw-semibold mt-2">
+                        {{ plan_usage.users }}
+                        <span class="text-muted fs-6">/ {{ plan_user_limit_display }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="border rounded-3 p-3 h-100">
+                    <div class="text-muted small text-uppercase">Invitations en attente</div>
+                    <div class="fs-4 fw-semibold mt-2">
+                        {{ plan_usage.pending_invitations }}
+                        <span class="text-muted fs-6">/ {{ plan_pending_invitation_limit_display }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="border rounded-3 p-3 h-100">
                     <div class="text-muted small text-uppercase">Stockage</div>
                     <div class="fs-4 fw-semibold mt-2">
                         {{ plan_usage.storage_mb }} Mo
                         <span class="text-muted fs-6">/ {{ plan_storage_limit_display }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="border rounded-3 p-3 h-100">
+                    <div class="text-muted small text-uppercase">Retention messages</div>
+                    <div class="fs-4 fw-semibold mt-2">
+                        {{ plan_message_retention_days }}
+                        <span class="text-muted fs-6">jours</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="border rounded-3 p-3 h-100">
+                    <div class="text-muted small text-uppercase">Retention notifications</div>
+                    <div class="fs-4 fw-semibold mt-2">
+                        {{ plan_notification_retention_days }}
+                        <span class="text-muted fs-6">jours</span>
                     </div>
                 </div>
             </div>

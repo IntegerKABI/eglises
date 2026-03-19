@@ -1,6 +1,66 @@
-from django.core.exceptions import ValidationError
+from datetime import timedelta
 
-from .models import Church, Event, Member, Page, Sermon
+from django.core.exceptions import ValidationError
+from django.db.models import Q
+from django.utils import timezone
+
+from .models import (
+    Church,
+    ChurchInvitation,
+    ChurchMembership,
+    ContactMessage,
+    Event,
+    Member,
+    Notification,
+    Page,
+    Sermon,
+)
+
+
+COUNT_RESOURCE_CONFIG = {
+    "members": {
+        "model": Member,
+        "label": "membres",
+        "queryset": lambda church: Member.objects.filter(church=church),
+    },
+    "events": {
+        "model": Event,
+        "label": "evenements",
+        "queryset": lambda church: Event.objects.filter(church=church),
+    },
+    "sermons": {
+        "model": Sermon,
+        "label": "predications",
+        "queryset": lambda church: Sermon.objects.filter(church=church),
+    },
+    "pages": {
+        "model": Page,
+        "label": "pages",
+        "queryset": lambda church: Page.objects.filter(church=church),
+    },
+    "users": {
+        "model": ChurchMembership,
+        "label": "utilisateurs",
+        "queryset": lambda church: ChurchMembership.objects.filter(church=church, is_active=True),
+    },
+    "pending_invitations": {
+        "model": ChurchInvitation,
+        "label": "invitations en attente",
+        "queryset": lambda church: ChurchInvitation.objects.filter(
+            church=church,
+            status=ChurchInvitation.Status.PENDING,
+        ),
+    },
+}
+
+RETENTION_RESOURCE_CONFIG = {
+    "message_retention_days": {
+        "label": "messages",
+    },
+    "notification_retention_days": {
+        "label": "notifications",
+    },
+}
 
 
 def _field_file_size(field_file):
@@ -32,12 +92,18 @@ def get_storage_usage_mb(church):
     return round(get_storage_usage_bytes(church) / (1024 * 1024), 2)
 
 
+def get_resource_count(church, resource):
+    config = COUNT_RESOURCE_CONFIG[resource]
+    return config["queryset"](church).count()
+
+
 def get_plan_usage(church):
-    return {
-        "members": Member.objects.filter(church=church).count(),
-        "events": Event.objects.filter(church=church).count(),
-        "storage_mb": get_storage_usage_mb(church),
+    usage = {
+        resource: get_resource_count(church, resource)
+        for resource in COUNT_RESOURCE_CONFIG
     }
+    usage["storage_mb"] = get_storage_usage_mb(church)
+    return usage
 
 
 def _raise_limit_error(message):
@@ -49,11 +115,7 @@ def enforce_count_limit(church, resource, current_count):
     if limit is None:
         return
     if current_count >= limit:
-        resource_labels = {
-            "members": "membres",
-            "events": "evenements",
-        }
-        label = resource_labels.get(resource, resource)
+        label = COUNT_RESOURCE_CONFIG.get(resource, {}).get("label", resource)
         _raise_limit_error(
             f"Limite du plan atteinte pour les {label} ({limit}). "
             "Passez a un plan superieur ou ajustez la limite."
@@ -88,14 +150,79 @@ def enforce_storage_limit(church, extra_bytes):
         )
 
 
+def get_retention_cutoff(church, resource):
+    retention_days = church.get_plan_limit(resource)
+    if not retention_days:
+        return None
+    return timezone.now() - timedelta(days=retention_days)
+
+
+def filter_messages_for_retention(queryset, church):
+    cutoff = get_retention_cutoff(church, "message_retention_days")
+    if cutoff is None:
+        return queryset
+    return queryset.filter(
+        Q(created_at__gte=cutoff)
+        | Q(status__in=[ContactMessage.Status.NEW, ContactMessage.Status.READ])
+    )
+
+
+def filter_notifications_for_retention(queryset, churches):
+    church_list = list(churches)
+    if not church_list:
+        return queryset.none()
+
+    retention_filter = Q()
+    unrestricted_ids = []
+
+    for church in church_list:
+        cutoff = get_retention_cutoff(church, "notification_retention_days")
+        if cutoff is None:
+            unrestricted_ids.append(church.pk)
+            continue
+        retention_filter |= Q(church=church, created_at__gte=cutoff)
+
+    if unrestricted_ids:
+        retention_filter |= Q(church_id__in=unrestricted_ids)
+
+    return queryset.filter(retention_filter) if retention_filter else queryset.none()
+
+
+def purge_expired_activity(church):
+    notification_cutoff = get_retention_cutoff(church, "notification_retention_days")
+    deleted_notifications = 0
+    if notification_cutoff is not None:
+        deleted_notifications, _ = Notification.objects.filter(
+            church=church,
+            created_at__lt=notification_cutoff,
+        ).delete()
+
+    message_cutoff = get_retention_cutoff(church, "message_retention_days")
+    deleted_messages = 0
+    if message_cutoff is not None:
+        deleted_messages, _ = ContactMessage.objects.filter(
+            church=church,
+            created_at__lt=message_cutoff,
+            status__in=[ContactMessage.Status.RESPONDED, ContactMessage.Status.ARCHIVED],
+        ).delete()
+
+    return {
+        "notifications_deleted": deleted_notifications,
+        "messages_deleted": deleted_messages,
+    }
+
+
 def enforce_limits_for_model(church, model, *, instance=None, form=None):
     is_create = instance is None or not getattr(instance, "pk", None)
 
-    if model is Member and is_create:
-        enforce_count_limit(church, "members", Member.objects.filter(church=church).count())
-
-    if model is Event and is_create:
-        enforce_count_limit(church, "events", Event.objects.filter(church=church).count())
+    for resource, config in COUNT_RESOURCE_CONFIG.items():
+        if model is config["model"] and is_create:
+            enforce_count_limit(
+                church,
+                resource,
+                config["queryset"](church).count(),
+            )
+            break
 
     if form is not None:
         enforce_storage_limit(church, get_storage_delta_bytes(form))

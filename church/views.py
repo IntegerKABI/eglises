@@ -87,7 +87,12 @@ from .notifications import (
     notify_user_role_change,
 )
 from .audit import log_audit
-from .limits import enforce_limits_for_model, get_plan_usage
+from .limits import (
+    enforce_limits_for_model,
+    filter_messages_for_retention,
+    filter_notifications_for_retention,
+    get_plan_usage,
+)
 from .membership_policy import (
     get_pending_invitations_for_user,
     validate_single_church_membership,
@@ -567,9 +572,12 @@ def accept_invite(request, token):
                     new_role = membership.role
                 if membership.role != new_role:
                     membership.role = new_role
+                if not membership.is_active:
+                    enforce_limits_for_model(invite.church, ChurchMembership)
                 membership.is_active = True
                 membership.save(update_fields=['role', 'is_active'])
             else:
+                enforce_limits_for_model(invite.church, ChurchMembership)
                 ChurchMembership.objects.create(
                     user=request.user,
                     church=invite.church,
@@ -741,6 +749,11 @@ def dashboard(request):
     if not church:
         return redirect('select_church')
 
+    recent_messages = filter_messages_for_retention(
+        church.messages.filter(status=ContactMessage.Status.NEW),
+        church,
+    )
+
     context = {
         'church': church,
         'total_members': church.members.filter(is_active=True).count(),
@@ -749,9 +762,19 @@ def dashboard(request):
         'plan_usage': get_plan_usage(church),
         'plan_member_limit': church.get_plan_limit('members'),
         'plan_event_limit': church.get_plan_limit('events'),
+        'plan_sermon_limit': church.get_plan_limit('sermons'),
+        'plan_page_limit': church.get_plan_limit('pages'),
+        'plan_user_limit': church.get_plan_limit('users'),
+        'plan_pending_invitation_limit': church.get_plan_limit('pending_invitations'),
         'plan_storage_limit_mb': church.get_plan_limit('storage_mb'),
+        'plan_message_retention_days': church.get_plan_limit('message_retention_days'),
+        'plan_notification_retention_days': church.get_plan_limit('notification_retention_days'),
         'plan_member_limit_display': church.get_plan_limit('members') if church.get_plan_limit('members') is not None else 'Illimite',
         'plan_event_limit_display': church.get_plan_limit('events') if church.get_plan_limit('events') is not None else 'Illimite',
+        'plan_sermon_limit_display': church.get_plan_limit('sermons') if church.get_plan_limit('sermons') is not None else 'Illimite',
+        'plan_page_limit_display': church.get_plan_limit('pages') if church.get_plan_limit('pages') is not None else 'Illimite',
+        'plan_user_limit_display': church.get_plan_limit('users') if church.get_plan_limit('users') is not None else 'Illimite',
+        'plan_pending_invitation_limit_display': church.get_plan_limit('pending_invitations') if church.get_plan_limit('pending_invitations') is not None else 'Illimite',
         'plan_storage_limit_display': (
             f"{church.get_plan_limit('storage_mb')} Mo"
             if church.get_plan_limit('storage_mb') is not None
@@ -761,8 +784,8 @@ def dashboard(request):
             is_active=True,
             event_date__gte=timezone.now().date()
         )[:5],
-        'recent_messages': church.messages.filter(status=ContactMessage.Status.NEW)[:5],
-        'unread_messages_count': church.messages.filter(status=ContactMessage.Status.NEW).count(),
+        'recent_messages': recent_messages[:5],
+        'unread_messages_count': recent_messages.count(),
     }
     return render(request, 'admin_dashboard/dashboard.html', context)
 
@@ -1468,6 +1491,12 @@ def toggle_membership(request, pk):
             return redirect('manage_users')
         membership.is_active = False
     elif action == 'activate':
+        if not membership.is_active:
+            try:
+                enforce_limits_for_model(church, ChurchMembership)
+            except ValidationError as exc:
+                messages.error(request, exc.messages[0])
+                return redirect('manage_users')
         membership.is_active = True
     membership.save(update_fields=['is_active'])
     status_label = "actif" if membership.is_active else "inactif"
@@ -1573,6 +1602,19 @@ def edit_membership(request, pk):
     if request.method == 'POST':
         form = ChurchMembershipUpdateForm(request.POST, instance=membership)
         if form.is_valid():
+            if not old_active and form.cleaned_data.get('is_active'):
+                try:
+                    enforce_limits_for_model(church, ChurchMembership)
+                except ValidationError as exc:
+                    form.add_error(None, exc)
+                    if is_ajax(request):
+                        return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+                    return render(request, 'admin_dashboard/membership_form.html', {
+                        'church': church,
+                        'form': form,
+                        'title': "Modifier un utilisateur",
+                        'membership': membership,
+                    })
             form.save()
             if membership.role != old_role or membership.is_active != old_active:
                 status_label = "actif" if membership.is_active else "inactif"
@@ -1622,7 +1664,10 @@ def manage_messages(request):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
-    contact_messages = church.messages.select_related('assigned_to')
+    contact_messages = filter_messages_for_retention(
+        church.messages.select_related('assigned_to'),
+        church,
+    )
     q = _get_text_param(request, 'q', 200)
     if q:
         contact_messages = contact_messages.filter(
@@ -1656,7 +1701,10 @@ def read_message(request, pk):
     if not church:
         return redirect('select_church')
     msg = get_object_or_404(
-        ContactMessage.objects.select_related('assigned_to', 'responded_by'),
+        filter_messages_for_retention(
+            ContactMessage.objects.select_related('assigned_to', 'responded_by'),
+            church,
+        ),
         pk=pk,
         church=church,
     )
@@ -1731,11 +1779,14 @@ def manage_notifications(request):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
-    accessible_churches = get_accessible_churches(request.user)
-    notifications = Notification.objects.filter(
-        recipient=request.user,
-        church__in=accessible_churches,
-    ).select_related('church')
+    accessible_churches = list(get_accessible_churches(request.user))
+    notifications = filter_notifications_for_retention(
+        Notification.objects.filter(
+            recipient=request.user,
+            church__in=accessible_churches,
+        ).select_related('church'),
+        accessible_churches,
+    )
     church_filter = request.GET.get('church')
     if church_filter:
         notifications = notifications.filter(church_id=church_filter, church__in=accessible_churches)
@@ -1764,12 +1815,16 @@ def open_notification(request, pk):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
-    accessible_churches = get_accessible_churches(request.user)
+    accessible_churches = list(get_accessible_churches(request.user))
     notification = get_object_or_404(
-        Notification,
+        filter_notifications_for_retention(
+            Notification.objects.filter(
+                recipient=request.user,
+                church__in=accessible_churches,
+            ),
+            accessible_churches,
+        ),
         pk=pk,
-        recipient=request.user,
-        church__in=accessible_churches,
     )
     if not notification.is_read:
         notification.is_read = True
@@ -1790,12 +1845,16 @@ def mark_notification_read(request, pk):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
-    accessible_churches = get_accessible_churches(request.user)
+    accessible_churches = list(get_accessible_churches(request.user))
     notification = get_object_or_404(
-        Notification,
+        filter_notifications_for_retention(
+            Notification.objects.filter(
+                recipient=request.user,
+                church__in=accessible_churches,
+            ),
+            accessible_churches,
+        ),
         pk=pk,
-        recipient=request.user,
-        church__in=accessible_churches,
     )
     if request.method == 'POST':
         notification.is_read = True
@@ -1810,11 +1869,14 @@ def mark_all_notifications_read(request):
     if not church:
         return redirect('select_church')
     if request.method == 'POST':
-        accessible_churches = get_accessible_churches(request.user)
-        Notification.objects.filter(
-            recipient=request.user,
-            is_read=False,
-            church__in=accessible_churches,
+        accessible_churches = list(get_accessible_churches(request.user))
+        filter_notifications_for_retention(
+            Notification.objects.filter(
+                recipient=request.user,
+                is_read=False,
+                church__in=accessible_churches,
+            ),
+            accessible_churches,
         ).update(is_read=True)
     return redirect('manage_notifications')
 

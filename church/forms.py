@@ -28,6 +28,7 @@ from .models import (
     ContactMessageReply,
     SiteSettings,
 )
+from .limits import enforce_limits_for_model
 from .membership_policy import validate_single_church_membership
 
 
@@ -170,6 +171,7 @@ class ChurchUserCreateForm(forms.ModelForm):
         user = super().save(commit=False)
         user.set_password(self.cleaned_data['password1'])
         with transaction.atomic():
+            enforce_limits_for_model(church, ChurchMembership)
             user.save()
             ChurchMembership.objects.create(
                 user=user,
@@ -216,12 +218,15 @@ class ChurchMembershipAssignForm(forms.Form):
             raise ValidationError("Utilisateur introuvable.")
         membership = ChurchMembership.objects.filter(user=self.user, church=church).first()
         if membership:
+            if not membership.is_active:
+                enforce_limits_for_model(church, ChurchMembership)
             membership.role = self.cleaned_data['role']
             membership.is_active = True
             membership.save(update_fields=['role', 'is_active'])
             self.created = False
             return membership
         self.created = True
+        enforce_limits_for_model(church, ChurchMembership)
         return ChurchMembership.objects.create(
             user=self.user,
             church=church,
@@ -296,6 +301,8 @@ class ChurchInvitationForm(forms.ModelForm):
         if self.invited_by:
             invite.invited_by = self.invited_by
         if commit:
+            if self.church and invite.status == ChurchInvitation.Status.PENDING:
+                enforce_limits_for_model(self.church, ChurchInvitation)
             invite.save()
         return invite
 

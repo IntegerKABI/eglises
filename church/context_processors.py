@@ -12,12 +12,14 @@ sans qu'on ait besoin de les passer manuellement dans chaque vue.
 """
 
 from .models import Notification, SiteSettings
+from .limits import filter_notifications_for_retention
 from .permissions import (
     CAP_SWITCH_CHURCH,
     CAP_VIEW_AUDIT,
     get_capabilities_for_request,
     user_has_any_capability,
 )
+from .tenancy import get_accessible_churches
 
 
 def church_context(request):
@@ -39,9 +41,14 @@ def church_context(request):
     can_switch_church = user_has_any_capability(request.user, CAP_SWITCH_CHURCH)
     unread_notifications_count = 0
     if request.user.is_authenticated:
-        unread_notifications_count = Notification.objects.filter(
-            recipient=request.user,
-            is_read=False,
+        accessible_churches = list(get_accessible_churches(request.user))
+        unread_notifications_count = filter_notifications_for_retention(
+            Notification.objects.filter(
+                recipient=request.user,
+                is_read=False,
+                church__in=accessible_churches,
+            ),
+            accessible_churches,
         ).count()
     return {
         'current_church': church,
