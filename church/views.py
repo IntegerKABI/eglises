@@ -76,6 +76,7 @@ from .permissions import (
     CAP_MANAGE_USERS,
     CAP_VIEW_AUDIT,
     CAP_VIEW_DASHBOARD,
+    get_capabilities_for_user,
     get_churches_for_capability,
     require_capability,
 )
@@ -759,17 +760,44 @@ def dashboard(request):
     if not church:
         return redirect('select_church')
 
+    membership = getattr(request, 'current_membership', None)
+    if membership is None and request.user.is_authenticated and not request.user.is_superuser:
+        membership = get_membership(request.user, church)
+        request.current_membership = membership
+
+    capabilities = get_capabilities_for_user(request.user, membership)
+    can_manage_messages = request.user.is_superuser or CAP_MANAGE_MESSAGES in capabilities
+    can_manage_members = request.user.is_superuser or CAP_MANAGE_MEMBERS in capabilities
+    can_manage_pages = request.user.is_superuser or CAP_MANAGE_PAGES in capabilities
+    can_manage_church_settings = (
+        request.user.is_superuser or CAP_MANAGE_CHURCH_SETTINGS in capabilities
+    )
+
     recent_messages = filter_messages_for_retention(
         church.messages.filter(status=ContactMessage.Status.NEW),
         church,
-    )
+    ) if can_manage_messages else church.messages.none()
+    assigned_messages = filter_messages_for_retention(
+        church.messages.filter(assigned_to=request.user),
+        church,
+    ) if can_manage_messages else church.messages.none()
+    recent_sermons = church.sermons.filter(is_active=True).order_by('-created_at')[:5]
+    recent_pages = church.pages.filter(is_active=True).order_by('sort_order', 'title')[:5]
+    recent_members = church.members.filter(is_active=True).order_by('-created_at')[:5]
+    plan_usage = get_plan_usage(church)
 
     context = {
         'church': church,
+        'capabilities': capabilities,
+        'show_plan_summary': can_manage_church_settings,
+        'show_message_overview': can_manage_messages,
+        'show_member_overview': can_manage_members,
+        'show_page_overview': can_manage_pages,
         'total_members': church.members.filter(is_active=True).count(),
         'total_events': church.events.filter(is_active=True).count(),
         'total_sermons': church.sermons.filter(is_active=True).count(),
-        'plan_usage': get_plan_usage(church),
+        'total_pages': church.pages.filter(is_active=True).count(),
+        'plan_usage': plan_usage,
         'plan_member_limit': church.get_plan_limit('members'),
         'plan_event_limit': church.get_plan_limit('events'),
         'plan_sermon_limit': church.get_plan_limit('sermons'),
@@ -796,6 +824,12 @@ def dashboard(request):
         )[:5],
         'recent_messages': recent_messages[:5],
         'unread_messages_count': recent_messages.count(),
+        'assigned_messages_count': assigned_messages.count(),
+        'recent_sermons': recent_sermons,
+        'recent_pages': recent_pages,
+        'recent_members': recent_members,
+        'draft_page_count': church.pages.filter(is_active=True, visibility='draft').count(),
+        'draft_sermon_count': church.sermons.filter(is_active=True, visibility='draft').count(),
     }
     return render(request, 'admin_dashboard/dashboard.html', context)
 
