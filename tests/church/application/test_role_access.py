@@ -19,7 +19,6 @@ class RoleAccessApplicationTests(SaaSTestCase):
         "dashboard",
         "manage_events",
         "manage_sermons",
-        "manage_members",
         "manage_pages",
     ]
     secretary_routes = [
@@ -27,6 +26,7 @@ class RoleAccessApplicationTests(SaaSTestCase):
         "manage_events",
         "manage_sermons",
         "manage_messages",
+        "manage_members",
     ]
 
     def setUp(self):
@@ -55,10 +55,12 @@ class RoleAccessApplicationTests(SaaSTestCase):
         self._assert_routes_accessible(self.staff, self.staff_routes)
         response = self.client.get(reverse("manage_messages"))
         self.assertRedirects(response, reverse("dashboard"), fetch_redirect_response=False)
+        response = self.client.get(reverse("manage_members"))
+        self.assertRedirects(response, reverse("dashboard"), fetch_redirect_response=False)
 
     def test_secretary_route_matrix(self):
         self._assert_routes_accessible(self.secretary, self.secretary_routes)
-        response = self.client.get(reverse("manage_members"))
+        response = self.client.get(reverse("manage_pages"))
         self.assertRedirects(response, reverse("dashboard"), fetch_redirect_response=False)
 
     def test_superadmin_can_access_platform_settings(self):

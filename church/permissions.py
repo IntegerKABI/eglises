@@ -34,6 +34,10 @@ ALL_CAPABILITIES = {
     CAP_VIEW_AUDIT,
 }
 
+# Finalized tenant role policy:
+# - admin: full church administration except platform settings
+# - staff: content operations (events, sermons, pages)
+# - secretary: office workflow (messages, members, events, sermons)
 ROLE_CAPABILITIES = {
     ChurchMembership.Role.ADMIN: ALL_CAPABILITIES - {CAP_MANAGE_SITE_SETTINGS},
     ChurchMembership.Role.STAFF: {
@@ -41,13 +45,13 @@ ROLE_CAPABILITIES = {
         CAP_MANAGE_EVENTS,
         CAP_MANAGE_SERMONS,
         CAP_MANAGE_PAGES,
-        CAP_MANAGE_MEMBERS,
     },
     ChurchMembership.Role.SECRETARY: {
         CAP_VIEW_DASHBOARD,
         CAP_MANAGE_EVENTS,
         CAP_MANAGE_SERMONS,
         CAP_MANAGE_MESSAGES,
+        CAP_MANAGE_MEMBERS,
     },
 }
 
