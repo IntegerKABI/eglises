@@ -1,70 +1,47 @@
-﻿"""
-=================================================================
-VUES — Logique de chaque page
-=================================================================
-Chaque fonction ici correspond à une page du site.
+"""Vues du tableau de bord church.
 
-COMMENT ÇA MARCHE :
-1. L'utilisateur tape une URL (ex: /eglise/demo/)
-2. Django cherche quelle vue correspond à cette URL (dans urls.py)
-3. La vue récupère les données depuis la base de données
-4. La vue envoie ces données à un template HTML
-5. Le template génère la page HTML finale
-
-Il y a 2 sections :
-- VUES PUBLIQUES : ce que les visiteurs voient
-- VUES DASHBOARD : l'interface d'administration pour le pasteur
-=================================================================
+Ce module reste le point d'entree historique des imports et re-exporte
+les vues publiques, les vues de notifications et la vue de connexion.
+Les fonctionnalites sont reparties dans des modules plus petits pour
+simplifier la lecture et la maintenance.
 """
 
 from datetime import timedelta
 
-from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib import messages
-from django.contrib.auth import get_user_model, login, logout
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.views import LoginView
-from django.core.mail import send_mail
-from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
-from django.http import Http404, JsonResponse
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-from django.views.decorators.http import require_POST
 from django.utils import timezone
-from django.utils.http import url_has_allowed_host_and_scheme
 
-from .models import (
-    Church,
-    ChurchInvitation,
-    ChurchMembership,
-    Event,
-    Sermon,
-    Member,
-    Page,
-    ContactMessage,
-    SiteSettings,
-    filter_public_queryset,
-    Notification,
-    AuditLog,
-)
+from .audit import log_audit
 from .forms import (
     ChurchForm,
-    EventForm,
-    SermonForm,
-    MemberForm,
-    PageForm,
-    ContactForm,
-    ContactMessageReplyForm,
-    ChurchUserCreateForm,
+    ChurchInvitationForm,
     ChurchMembershipAssignForm,
     ChurchMembershipUpdateForm,
-    ChurchInvitationForm,
-    InviteSignupForm,
+    ChurchUserCreateForm,
+    ContactMessageReplyForm,
+    EventForm,
+    MemberForm,
+    PageForm,
+    SermonForm,
     TransferAdminForm,
-    SiteSettingsForm,
+)
+from .limits import enforce_limits_for_model, filter_messages_for_retention, get_plan_usage
+from .models import Church, ChurchInvitation, ChurchMembership, ContactMessage, Event, Member, Page, Sermon
+from .notifications import (
+    notify_church_admins,
+    notify_event_recipients,
+    notify_message_recipients,
+    notify_user,
+    notify_user_role_change,
 )
 from .permissions import (
     CAP_MANAGE_CHURCH_SETTINGS,
@@ -73,679 +50,48 @@ from .permissions import (
     CAP_MANAGE_MESSAGES,
     CAP_MANAGE_PAGES,
     CAP_MANAGE_SERMONS,
-    CAP_MANAGE_SITE_SETTINGS,
     CAP_MANAGE_USERS,
-    CAP_VIEW_AUDIT,
     CAP_VIEW_DASHBOARD,
     get_capabilities_for_user,
-    get_churches_for_capability,
     require_capability,
 )
-from .notifications import (
-    notify_church_admins,
-    notify_message_recipients,
-    notify_event_recipients,
-    notify_user,
-    notify_user_role_change,
+from .public_views import (
+    accept_invite,
+    church_contact,
+    church_events,
+    church_home,
+    church_page,
+    church_sermons,
+    decline_invite,
+    home,
+    pending_invitations,
+    select_church,
 )
-from .audit import log_audit
-from .limits import (
-    enforce_limits_for_model,
-    filter_messages_for_retention,
-    filter_notifications_for_retention,
-    get_plan_usage,
+from .notification_views import (
+    manage_audit_logs,
+    manage_notifications,
+    mark_all_notifications_read,
+    mark_notification_read,
+    open_notification,
+    site_settings,
 )
-from .membership_policy import (
-    get_pending_invitations_for_user,
-    validate_single_church_membership,
+from .tenancy import get_membership
+from .view_helpers import (
+    TenantLoginView,
+    _get_choice_param,
+    _get_text_param,
+    _parse_bool_param,
+    _has_other_admins,
+    _mark_invite_notifications_read,
+    _handle_church_delete,
+    _handle_church_form,
+    _querystring_without_page,
+    _require_church,
+    _schedule_safe_after_commit,
+    _send_invite_email,
+    is_ajax,
 )
-from .tenancy import get_accessible_churches, get_membership, get_selected_church
 
-
-class TenantLoginView(LoginView):
-    template_name = "registration/login.html"
-
-    def get_success_url(self):
-        redirect_to = self.get_redirect_url()
-        if redirect_to:
-            return redirect_to
-
-        user = self.request.user
-        churches = get_accessible_churches(user)
-        church_count = churches.count()
-
-        if church_count == 0:
-            self.request.session.pop("active_church_id", None)
-            if _has_pending_invitations(user):
-                return reverse("pending_invitations")
-            logout(self.request)
-            messages.error(
-                self.request,
-                "Votre compte n'appartient a aucune eglise active et vous n'avez aucune invitation en attente. Contactez l'administration de l'eglise ou la plateforme.",
-            )
-            return reverse("home")
-
-        if not user.is_superuser and church_count > 1:
-            self.request.session.pop("active_church_id", None)
-            logout(self.request)
-            messages.error(
-                self.request,
-                "Votre compte est associe a plusieurs eglises actives. Contactez le superadministrateur.",
-            )
-            return reverse("home")
-
-        active_church_id = self.request.session.get("active_church_id")
-        if active_church_id and churches.filter(id=active_church_id).exists():
-            return reverse("dashboard")
-
-        if church_count == 1:
-            self.request.session["active_church_id"] = churches.values_list("id", flat=True).first()
-            return reverse("dashboard")
-
-        self.request.session.pop("active_church_id", None)
-        return reverse("select_church")
-
-
-def is_ajax(request):
-    """Vérifie si la requête est AJAX."""
-    return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-
-
-def _querystring_without_page(request):
-    params = request.GET.copy()
-    params.pop('page', None)
-    return params.urlencode()
-
-
-def _parse_bool_param(value):
-    if value in ('1', 'true', 'yes', 'on'):
-        return True
-    if value in ('0', 'false', 'no', 'off'):
-        return False
-    return None
-
-
-def _get_text_param(request, key, max_len=200):
-    value = request.GET.get(key, '')
-    if value is None:
-        return ''
-    value = value.strip()
-    if len(value) > max_len:
-        value = value[:max_len]
-    return value
-
-
-def _get_choice_param(request, key, allowed):
-    value = request.GET.get(key)
-    return value if value in allowed else ''
-
-
-def _has_other_admins(church, exclude_membership=None):
-    admins = ChurchMembership.objects.filter(
-        church=church,
-        role=ChurchMembership.Role.ADMIN,
-        is_active=True,
-    )
-    if exclude_membership:
-        admins = admins.exclude(pk=exclude_membership.pk)
-    return admins.exists()
-
-
-def _build_invite_url(request, invite):
-    return request.build_absolute_uri(reverse('accept_invite', args=[invite.token]))
-
-
-def _send_invite_email(request, invite):
-    invite_url = _build_invite_url(request, invite)
-    subject = f"Invitation à rejoindre {invite.church.name}"
-    message = (
-        f"Bonjour,\n\n"
-        f"Vous avez été invité à rejoindre {invite.church.name} en tant que {invite.get_role_display()}.\n"
-        f"Pour accepter l'invitation, cliquez ici : {invite_url}\n\n"
-        f"Cette invitation expirera le {invite.expires_at:%d/%m/%Y %H:%M}.\n"
-    )
-    send_mail(
-        subject,
-        message,
-        settings.DEFAULT_FROM_EMAIL or settings.EMAIL_HOST_USER,
-        [invite.email],
-        fail_silently=False,
-    )
-
-
-def _mark_invite_notifications_read(user, invite):
-    Notification.objects.filter(
-        recipient=user,
-        church=invite.church,
-        category=Notification.Category.INVITE,
-        is_read=False,
-    ).filter(
-        Q(link__icontains=str(invite.token)) | Q(title__icontains="Invitation")
-    ).update(is_read=True)
-
-
-def _has_pending_invitations(user):
-    return get_pending_invitations_for_user(user).exists()
-
-
-def _schedule_safe_after_commit(callback):
-    def wrapped():
-        try:
-            callback()
-        except Exception:
-            pass
-
-    transaction.on_commit(wrapped)
-
-
-def _require_church(request):
-    church = getattr(request, 'current_church', None)
-    if church is None:
-        church = get_selected_church(request, prefetch_pages=True)
-        request.current_church = church
-    if not church:
-        messages.warning(request, "Sélectionnez une église pour continuer.")
-        return None
-    if request.user.is_authenticated and not request.user.is_superuser:
-        membership = getattr(request, 'current_membership', None)
-        if membership is None:
-            membership = get_membership(request.user, church)
-            request.current_membership = membership
-        if not membership:
-            messages.error(request, "Accès refusé. Aucun rôle défini pour cette église.")
-            return None
-        if church.status in {Church.Status.SUSPENDED, Church.Status.ARCHIVED}:
-            messages.error(request, "Cette église est suspendue ou archivée.")
-            request.session.pop('active_church_id', None)
-            return None
-    return church
-
-
-def _get_public_church(request, church_slug):
-    church = getattr(request, 'current_church', None)
-    current_slug = getattr(request, 'current_church_slug', None)
-    if current_slug == church_slug:
-        if church is None:
-            raise Http404("Église introuvable.")
-        return church
-    return get_object_or_404(Church, slug=church_slug, status=Church.Status.ACTIVE)
-
-
-def _handle_church_form(
-    request,
-    form_class,
-    template_name,
-    success_message,
-    success_url_name,
-    title,
-    *,
-    instance=None,
-    object_name=None,
-    model=None,
-    pk=None,
-    after_save=None,
-):
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-
-    if instance is None and model is not None and pk is not None:
-        instance = get_object_or_404(model, pk=pk, church=church)
-
-    if request.method == 'POST':
-        form = form_class(request.POST, request.FILES, instance=instance)
-        if form.is_valid():
-            obj = form.save(commit=False)
-            if hasattr(obj, 'church_id'):
-                obj.church = church
-            if obj.pk is None and getattr(obj, 'created_by_id', None) is None and request.user.is_authenticated:
-                obj.created_by = request.user
-            is_created = obj.pk is None
-            try:
-                enforce_limits_for_model(
-                    church,
-                    obj.__class__,
-                    instance=instance or obj,
-                    form=form,
-                )
-            except ValidationError as exc:
-                form.add_error(None, exc)
-                context = {
-                    'church': church,
-                    'form': form,
-                    'title': title,
-                }
-                if object_name and instance is not None:
-                    context[object_name] = instance
-                if is_ajax(request):
-                    return JsonResponse({'success': False, 'errors': form.errors}, status=400)
-                return render(request, template_name, context)
-            obj.save()
-            if hasattr(form, 'save_m2m'):
-                form.save_m2m()
-            try:
-                action = "create" if is_created else "update"
-                log_audit(
-                    actor=request.user,
-                    church=church if hasattr(obj, 'church_id') else None,
-                    action=action,
-                    instance=obj,
-                    metadata={"form": form.__class__.__name__},
-                )
-            except Exception:
-                pass
-            if after_save:
-                after_save(obj, is_created)
-            if is_ajax(request):
-                return JsonResponse({
-                    'success': True,
-                    'message': success_message,
-                    'redirect': reverse(success_url_name),
-                })
-            messages.success(request, success_message)
-            return redirect(success_url_name)
-        if is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
-    else:
-        form = form_class(instance=instance)
-
-    context = {
-        'church': church,
-        'form': form,
-        'title': title,
-    }
-    if object_name and instance is not None:
-        context[object_name] = instance
-    return render(request, template_name, context)
-
-
-def _handle_church_delete(request, model, pk, success_message, success_url_name, *, after_delete=None):
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-    obj = get_object_or_404(model, pk=pk, church=church)
-    if request.method == 'POST':
-        if after_delete:
-            after_delete(obj)
-        try:
-            log_audit(
-                actor=request.user,
-                church=church,
-                action="delete",
-                instance=obj,
-            )
-        except Exception:
-            pass
-        obj.delete()
-        if is_ajax(request):
-            return JsonResponse({'success': True, 'message': success_message})
-        messages.success(request, success_message)
-    return redirect(success_url_name)
-
-
-# =============================================================
-#  VUES PUBLIQUES — Site visible par tous
-# =============================================================
-
-def home(request):
-    """Page d'accueil — liste toutes les églises disponibles."""
-    churches = Church.objects.filter(status=Church.Status.ACTIVE)
-    q = _get_text_param(request, 'q', 100)
-    if q:
-        churches = churches.filter(
-            Q(name__icontains=q) |
-            Q(city__icontains=q) |
-            Q(country__icontains=q)
-        )
-    paginator = Paginator(churches, 9)
-    page_obj = paginator.get_page(request.GET.get('page'))
-    return render(request, 'church/home.html', {
-        'churches': page_obj,
-        'page_obj': page_obj,
-        'querystring': _querystring_without_page(request),
-    })
-
-
-def church_home(request, church_slug):
-    """
-    Page d'accueil d'une église spécifique.
-    Ex: /eglise/demo/ → affiche l'église avec le slug "demo"
-    """
-    church = _get_public_church(request, church_slug)
-    upcoming_events = filter_public_queryset(church.events).filter(
-        event_date__gte=timezone.now().date()
-    )[:3]
-    latest_sermons = filter_public_queryset(church.sermons)[:3]
-    custom_pages = filter_public_queryset(church.pages).filter(is_in_menu=True)
-
-    return render(request, 'church/church_home.html', {
-        'church': church,
-        'upcoming_events': upcoming_events,
-        'latest_sermons': latest_sermons,
-        'custom_pages': custom_pages,
-    })
-
-
-def church_events(request, church_slug):
-    """Liste de tous les événements d'une église."""
-    church = _get_public_church(request, church_slug)
-    events = filter_public_queryset(church.events)
-    q = _get_text_param(request, 'q', 100)
-    if q:
-        events = events.filter(
-            Q(title__icontains=q) |
-            Q(description__icontains=q) |
-            Q(location__icontains=q)
-        )
-    featured = _parse_bool_param(request.GET.get('featured'))
-    if featured is True:
-        events = events.filter(is_featured=True)
-    elif featured is False:
-        events = events.filter(is_featured=False)
-    when = _get_choice_param(request, 'when', {'upcoming', 'past'})
-    today = timezone.now().date()
-    if when == 'upcoming':
-        events = events.filter(event_date__gte=today)
-    elif when == 'past':
-        events = events.filter(event_date__lt=today)
-    paginator = Paginator(events, 9)
-    page_obj = paginator.get_page(request.GET.get('page'))
-    return render(request, 'church/events.html', {
-        'church': church,
-        'events': page_obj,
-        'page_obj': page_obj,
-        'querystring': _querystring_without_page(request),
-    })
-
-
-def church_sermons(request, church_slug):
-    """Liste de toutes les prédications d'une église."""
-    church = _get_public_church(request, church_slug)
-    sermons = filter_public_queryset(church.sermons)
-    q = _get_text_param(request, 'q', 100)
-    if q:
-        sermons = sermons.filter(
-            Q(title__icontains=q) |
-            Q(description__icontains=q) |
-            Q(preacher__icontains=q) |
-            Q(bible_reference__icontains=q)
-        )
-    featured = _parse_bool_param(request.GET.get('featured'))
-    if featured is True:
-        sermons = sermons.filter(is_featured=True)
-    elif featured is False:
-        sermons = sermons.filter(is_featured=False)
-    paginator = Paginator(sermons, 9)
-    page_obj = paginator.get_page(request.GET.get('page'))
-    return render(request, 'church/sermons.html', {
-        'church': church,
-        'sermons': page_obj,
-        'page_obj': page_obj,
-        'querystring': _querystring_without_page(request),
-    })
-
-
-def church_page(request, church_slug, page_slug):
-    """Affiche une page dynamique personnalisée."""
-    church = _get_public_church(request, church_slug)
-    page = get_object_or_404(filter_public_queryset(Page.objects.filter(church=church, slug=page_slug)))
-    return render(request, 'church/custom_page.html', {
-        'church': church,
-        'page': page,
-    })
-
-
-def church_contact(request, church_slug):
-    """Formulaire de contact d'une église."""
-    church = _get_public_church(request, church_slug)
-
-    if request.method == 'POST':
-        form = ContactForm(request.POST)
-        if form.is_valid():
-            message = form.save(commit=False)
-            message.church = church
-            message.save()
-            notify_message_recipients(
-                church,
-                category="message",
-                title="Nouveau message reçu",
-                body=f"{message.sender_name} - {message.subject or 'Sans sujet'}",
-                link=reverse('read_message', args=[message.pk]),
-            )
-            if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Votre message a été envoyé avec succès !'})
-            messages.success(request, 'Votre message a été envoyé avec succès !')
-            return redirect('church_contact', church_slug=church_slug)
-        elif is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
-    else:
-        form = ContactForm()
-
-    return render(request, 'church/contact.html', {
-        'church': church,
-        'form': form,
-    })
-
-
-def accept_invite(request, token):
-    invite = get_object_or_404(ChurchInvitation, token=token)
-    if invite.status != ChurchInvitation.Status.PENDING:
-        messages.info(request, "Cette invitation n'est plus disponible.")
-        if request.user.is_authenticated:
-            return redirect('pending_invitations')
-        return redirect('home')
-    if invite.church.status in {Church.Status.SUSPENDED, Church.Status.ARCHIVED}:
-        messages.error(request, "Cette église n'accepte pas de nouvelles invitations.")
-        if request.user.is_authenticated:
-            return redirect('pending_invitations')
-        return redirect('home')
-    if invite.is_expired:
-        invite.status = ChurchInvitation.Status.EXPIRED
-        invite.save(update_fields=['status'])
-        messages.error(request, "Cette invitation a expiré.")
-        if request.user.is_authenticated:
-            return redirect('pending_invitations')
-        return redirect('home')
-
-    if not request.user.is_authenticated:
-        form = InviteSignupForm(request.POST or None, email=invite.email)
-        if request.method == 'POST' and form.is_valid():
-            user = form.save()
-            login(request, user)
-            request.user = user
-        else:
-            return render(request, 'church/accept_invite_signup.html', {
-                'invite': invite,
-                'church': invite.church,
-                'form': form,
-            })
-
-    user_email = (request.user.email or '').strip().lower()
-    if not user_email or user_email != invite.email.lower():
-        messages.error(request, "Cette invitation ne correspond pas à votre email.")
-        return redirect('dashboard')
-
-    try:
-        validate_single_church_membership(request.user, church=invite.church)
-    except ValidationError as exc:
-        messages.error(request, exc.messages[0])
-        return redirect('pending_invitations')
-
-    if request.method == 'POST':
-        with transaction.atomic():
-            membership = (
-                ChurchMembership.objects.select_for_update()
-                .filter(user=request.user, church=invite.church)
-                .first()
-            )
-            if membership:
-                new_role = invite.role
-                if membership.role == ChurchMembership.Role.ADMIN and invite.role != ChurchMembership.Role.ADMIN:
-                    new_role = membership.role
-                if membership.role != new_role:
-                    membership.role = new_role
-                if not membership.is_active:
-                    enforce_limits_for_model(invite.church, ChurchMembership)
-                membership.is_active = True
-                membership.save(update_fields=['role', 'is_active'])
-            else:
-                enforce_limits_for_model(invite.church, ChurchMembership)
-                ChurchMembership.objects.create(
-                    user=request.user,
-                    church=invite.church,
-                    role=invite.role,
-                    is_active=True,
-                )
-            invite.status = ChurchInvitation.Status.ACCEPTED
-            invite.accepted_at = timezone.now()
-            invite.accepted_by = request.user
-            invite.save(update_fields=['status', 'accepted_at', 'accepted_by'])
-        try:
-            log_audit(
-                actor=request.user,
-                church=invite.church,
-                action="invite_accept",
-                instance=invite,
-                metadata={"email": invite.email, "role": invite.role},
-            )
-        except Exception:
-            pass
-        notify_church_admins(
-            invite.church,
-            category="invite",
-            title="Invitation acceptée",
-            body=f"{request.user.get_full_name() or request.user.username} a rejoint l'église.",
-            link=reverse('manage_users'),
-            exclude=request.user,
-        )
-        if invite.invited_by and invite.invited_by != request.user:
-            notify_user(
-                invite.invited_by,
-                invite.church,
-                category="invite",
-                title="Invitation acceptée",
-                body=f"{request.user.get_full_name() or request.user.username} a accepté l'invitation.",
-                link=reverse('manage_users'),
-            )
-        _mark_invite_notifications_read(request.user, invite)
-        messages.success(request, "Invitation acceptée. Bienvenue !")
-        return redirect('dashboard')
-
-    return render(request, 'church/accept_invite.html', {
-        'invite': invite,
-        'church': invite.church,
-    })
-
-
-@login_required
-def pending_invitations(request):
-    invitations = get_pending_invitations_for_user(request.user)
-    if invitations.exists():
-        return render(request, 'church/pending_invitations.html', {
-            'invitations': invitations,
-        })
-
-    churches = get_accessible_churches(request.user)
-    if churches.exists():
-        return redirect('dashboard')
-
-    logout(request)
-    messages.info(
-        request,
-        "Votre compte n'appartient a aucune eglise active et vous n'avez aucune invitation en attente. Contactez l'administration de l'eglise ou la plateforme.",
-    )
-    return redirect('home')
-
-@login_required
-@require_POST
-def decline_invite(request, token):
-    invite = get_object_or_404(
-        ChurchInvitation,
-        token=token,
-        status=ChurchInvitation.Status.PENDING,
-        email__iexact=request.user.email,
-    )
-    if invite.is_expired:
-        messages.error(request, "Cette invitation a expire.")
-        return redirect('pending_invitations')
-
-    invite.status = ChurchInvitation.Status.DECLINED
-    invite.declined_at = timezone.now()
-    invite.save(update_fields=['status', 'declined_at'])
-    _mark_invite_notifications_read(request.user, invite)
-    try:
-        log_audit(
-            actor=request.user,
-            church=invite.church,
-            action="invite_decline",
-            instance=invite,
-            metadata={"email": invite.email, "role": invite.role},
-        )
-    except Exception:
-        pass
-    notify_church_admins(
-        invite.church,
-        category="invite",
-        title="Invitation refusee",
-        body=f"{request.user.get_full_name() or request.user.username} a refuse l'invitation.",
-        link=reverse('manage_users'),
-        exclude=request.user,
-    )
-    if invite.invited_by and invite.invited_by != request.user:
-        notify_user(
-            invite.invited_by,
-            invite.church,
-            category="invite",
-            title="Invitation refusee",
-            body=f"{request.user.get_full_name() or request.user.username} a refuse l'invitation.",
-            link=reverse('manage_users'),
-        )
-    if _has_pending_invitations(request.user) or get_accessible_churches(request.user).exists():
-        messages.success(request, "Invitation refusee.")
-        return redirect('pending_invitations')
-
-    logout(request)
-    messages.success(request, "Invitation refusee. Vous avez ete deconnecte car votre compte n'a plus aucun acces actif.")
-    return redirect('home')
-
-
-@login_required
-def select_church(request):
-    churches = get_accessible_churches(request.user)
-    if not churches.exists():
-        messages.warning(request, "Aucune église associée à votre compte.")
-        return redirect('home')
-
-    if not request.user.is_superuser:
-        if churches.count() > 1:
-            request.session.pop('active_church_id', None)
-            messages.error(
-                request,
-                "Votre compte est associe a plusieurs eglises actives. Contactez le superadministrateur.",
-            )
-            return redirect('home')
-        church = churches.first()
-        request.session['active_church_id'] = church.id
-        return redirect('dashboard')
-
-    if request.method == 'POST':
-        church_id = request.POST.get('church_id')
-        church = churches.filter(id=church_id).first()
-        if not church:
-            messages.error(request, "Sélection d'église invalide.")
-        else:
-            request.session['active_church_id'] = church.id
-            return redirect('dashboard')
-
-    return render(request, 'admin_dashboard/select_church.html', {
-        'churches': churches,
-        'selected_church_id': request.session.get('active_church_id'),
-    })
-
-
-# =============================================================
-#  VUES DASHBOARD — Interface d'administration (pasteur/admin)
-# =============================================================
 
 @login_required
 @require_capability(CAP_VIEW_DASHBOARD)
@@ -874,8 +220,6 @@ def church_settings(request):
     })
 
 
-# --- CRUD Événements ---
-
 @login_required
 @require_capability(CAP_MANAGE_EVENTS)
 def manage_events(request):
@@ -997,8 +341,6 @@ def delete_event(request, pk):
     )
 
 
-# --- CRUD Prédications ---
-
 @login_required
 @require_capability(CAP_MANAGE_SERMONS)
 def manage_sermons(request):
@@ -1077,8 +419,6 @@ def delete_sermon(request, pk):
         success_url_name='manage_sermons',
     )
 
-
-# --- CRUD Membres ---
 
 @login_required
 @require_capability(CAP_MANAGE_MEMBERS)
@@ -1162,8 +502,6 @@ def delete_member(request, pk):
     )
 
 
-# --- CRUD Pages ---
-
 @login_required
 @require_capability(CAP_MANAGE_PAGES)
 def manage_pages(request):
@@ -1240,8 +578,6 @@ def delete_page(request, pk):
         success_url_name='manage_pages',
     )
 
-
-# --- Utilisateurs & Rôles ---
 
 @login_required
 @require_capability(CAP_MANAGE_USERS)
@@ -1754,8 +1090,6 @@ def edit_membership(request, pk):
     })
 
 
-# --- Messages de contact ---
-
 @login_required
 @require_capability(CAP_MANAGE_MESSAGES)
 def manage_messages(request):
@@ -1866,183 +1200,4 @@ def read_message(request, pk):
         'msg': msg,
         'reply_form': reply_form,
         'replies': msg.replies.select_related('created_by'),
-    })
-
-
-# --- Notifications ---
-
-@login_required
-@require_capability(CAP_VIEW_DASHBOARD)
-def manage_notifications(request):
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-    accessible_churches = list(get_accessible_churches(request.user))
-    notifications = filter_notifications_for_retention(
-        Notification.objects.filter(
-            recipient=request.user,
-            church__in=accessible_churches,
-        ).select_related('church'),
-        accessible_churches,
-    )
-    church_filter = request.GET.get('church')
-    if church_filter:
-        notifications = notifications.filter(church_id=church_filter, church__in=accessible_churches)
-    status = _get_choice_param(request, 'status', {'read', 'unread'})
-    if status == 'read':
-        notifications = notifications.filter(is_read=True)
-    elif status == 'unread':
-        notifications = notifications.filter(is_read=False)
-    category = _get_choice_param(request, 'category', {c for c, _ in Notification.Category.choices})
-    if category:
-        notifications = notifications.filter(category=category)
-    paginator = Paginator(notifications, 15)
-    page_obj = paginator.get_page(request.GET.get('page'))
-    return render(request, 'admin_dashboard/notifications.html', {
-        'church': church,
-        'churches': accessible_churches,
-        'notifications': page_obj,
-        'page_obj': page_obj,
-        'querystring': _querystring_without_page(request),
-    })
-
-
-@login_required
-@require_capability(CAP_VIEW_DASHBOARD)
-def open_notification(request, pk):
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-    accessible_churches = list(get_accessible_churches(request.user))
-    notification = get_object_or_404(
-        filter_notifications_for_retention(
-            Notification.objects.filter(
-                recipient=request.user,
-                church__in=accessible_churches,
-            ),
-            accessible_churches,
-        ),
-        pk=pk,
-    )
-    if not notification.is_read:
-        notification.is_read = True
-        notification.save(update_fields=['is_read'])
-    target = notification.link
-    if target and url_has_allowed_host_and_scheme(
-        target,
-        allowed_hosts={request.get_host()},
-        require_https=request.is_secure(),
-    ):
-        return redirect(target)
-    return redirect('manage_notifications')
-
-
-@login_required
-@require_capability(CAP_VIEW_DASHBOARD)
-def mark_notification_read(request, pk):
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-    accessible_churches = list(get_accessible_churches(request.user))
-    notification = get_object_or_404(
-        filter_notifications_for_retention(
-            Notification.objects.filter(
-                recipient=request.user,
-                church__in=accessible_churches,
-            ),
-            accessible_churches,
-        ),
-        pk=pk,
-    )
-    if request.method == 'POST':
-        notification.is_read = True
-        notification.save(update_fields=['is_read'])
-    return redirect('manage_notifications')
-
-
-@login_required
-@require_capability(CAP_VIEW_DASHBOARD)
-def mark_all_notifications_read(request):
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-    if request.method == 'POST':
-        accessible_churches = list(get_accessible_churches(request.user))
-        filter_notifications_for_retention(
-            Notification.objects.filter(
-                recipient=request.user,
-                is_read=False,
-                church__in=accessible_churches,
-            ),
-            accessible_churches,
-        ).update(is_read=True)
-    return redirect('manage_notifications')
-
-
-@login_required
-@require_capability(CAP_VIEW_AUDIT)
-def manage_audit_logs(request):
-    churches = get_churches_for_capability(request.user, CAP_VIEW_AUDIT)
-    logs = AuditLog.objects.select_related('actor', 'church')
-    if not request.user.is_superuser:
-        logs = logs.filter(church__in=churches)
-
-    church_filter = request.GET.get('church')
-    if church_filter == 'platform' and request.user.is_superuser:
-        logs = logs.filter(church__isnull=True)
-    elif church_filter:
-        logs = logs.filter(church_id=church_filter)
-
-    action = _get_text_param(request, 'action', 50)
-    if action:
-        logs = logs.filter(action__icontains=action)
-
-    paginator = Paginator(logs, 20)
-    page_obj = paginator.get_page(request.GET.get('page'))
-    return render(request, 'admin_dashboard/audit_logs.html', {
-        'church': getattr(request, 'current_church', None),
-        'churches': churches,
-        'logs': page_obj,
-        'page_obj': page_obj,
-        'querystring': _querystring_without_page(request),
-        'show_platform': request.user.is_superuser,
-    })
-
-
-# --- Paramètres globaux (super-admin uniquement) ---
-
-@login_required
-@require_capability(CAP_MANAGE_SITE_SETTINGS)
-def site_settings(request):
-    """Paramètres globaux de la plateforme (nom, slogan, etc.)."""
-    settings_obj = SiteSettings.get()
-    church = get_selected_church(request)
-
-    if request.method == 'POST':
-        form = SiteSettingsForm(request.POST, request.FILES, instance=settings_obj)
-        if form.is_valid():
-            form.save()
-            try:
-                log_audit(
-                    actor=request.user,
-                    church=None,
-                    action="settings_update",
-                    instance=settings_obj,
-                    metadata={"section": "site_settings"},
-                )
-            except Exception:
-                pass
-            if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Paramètres de la plateforme mis à jour !'})
-            messages.success(request, 'Paramètres de la plateforme mis à jour !')
-            return redirect('site_settings')
-        elif is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
-    else:
-        form = SiteSettingsForm(instance=settings_obj)
-
-    return render(request, 'admin_dashboard/site_settings.html', {
-        'church': church,
-        'form': form,
-        'site_settings': settings_obj,
     })
