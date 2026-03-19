@@ -13,6 +13,7 @@ On les personnalise ici pour :
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
@@ -299,6 +300,7 @@ class ChurchInvitationForm(forms.ModelForm):
                 church=self.church,
                 email__iexact=email,
                 status=ChurchInvitation.Status.PENDING,
+                expires_at__gt=timezone.now(),
             ).exists():
                 raise ValidationError("Une invitation en attente existe déjà pour cet email.")
         return email

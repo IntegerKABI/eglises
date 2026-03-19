@@ -49,6 +49,7 @@ COUNT_RESOURCE_CONFIG = {
         "queryset": lambda church: ChurchInvitation.objects.filter(
             church=church,
             status=ChurchInvitation.Status.PENDING,
+            expires_at__gt=timezone.now(),
         ),
     },
 }

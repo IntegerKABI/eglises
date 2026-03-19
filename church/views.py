@@ -32,6 +32,7 @@ from django.db.models import Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.views.decorators.http import require_POST
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 
@@ -656,6 +657,7 @@ def pending_invitations(request):
     return redirect('home')
 
 @login_required
+@require_POST
 def decline_invite(request, token):
     invite = get_object_or_404(
         ChurchInvitation,
@@ -663,11 +665,7 @@ def decline_invite(request, token):
         status=ChurchInvitation.Status.PENDING,
         email__iexact=request.user.email,
     )
-    if request.method != 'POST':
-        return redirect('pending_invitations')
     if invite.is_expired:
-        invite.status = ChurchInvitation.Status.EXPIRED
-        invite.save(update_fields=['status'])
         messages.error(request, "Cette invitation a expire.")
         return redirect('pending_invitations')
 
@@ -1251,15 +1249,11 @@ def manage_users(request):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
-    ChurchInvitation.objects.filter(
-        church=church,
-        status=ChurchInvitation.Status.PENDING,
-        expires_at__lt=timezone.now(),
-    ).update(status=ChurchInvitation.Status.EXPIRED)
     memberships = ChurchMembership.objects.filter(church=church).select_related('user')
     pending_invites = ChurchInvitation.objects.filter(
         church=church,
         status=ChurchInvitation.Status.PENDING,
+        expires_at__gt=timezone.now(),
     ).order_by('-created_at')
     q = _get_text_param(request, 'q', 100)
     if q:

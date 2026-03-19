@@ -1,7 +1,9 @@
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.core import mail
 from django.test import override_settings
+from django.utils import timezone
 from django.urls import reverse
 
 from church.models import AuditLog, ChurchInvitation, ChurchMembership, Notification
@@ -82,6 +84,66 @@ class InvitationIntegrationTests(SaaSTestCase):
             response = self.client.post(reverse("resend_invite", args=[invite.pk]), follow=True)
 
         self.assertContains(response, "Impossible d&#x27;envoyer l&#x27;email")
+
+    def test_manage_users_get_does_not_mutate_expired_invitation_status(self):
+        invite = self.create_invitation(
+            self.church,
+            "expired@example.com",
+            invited_by=self.admin,
+            expires_at=timezone.now() - timedelta(hours=1),
+        )
+
+        response = self.client.get(reverse("manage_users"))
+
+        invite.refresh_from_db()
+        self.assertEqual(invite.status, ChurchInvitation.Status.PENDING)
+        self.assertContains(response, "Utilisateurs")
+        self.assertNotContains(response, invite.email)
+
+    def test_expired_pending_invitation_does_not_block_new_invite_for_same_email(self):
+        self.create_invitation(
+            self.church,
+            self.invited_user.email,
+            invited_by=self.admin,
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+
+        response = self.client.post(
+            reverse("invite_user"),
+            {
+                "email": self.invited_user.email,
+                "role": ChurchMembership.Role.SECRETARY,
+            },
+        )
+
+        self.assertRedirects(response, reverse("manage_users"))
+        self.assertEqual(
+            ChurchInvitation.objects.filter(church=self.church, email=self.invited_user.email).count(),
+            2,
+        )
+        self.assertTrue(
+            ChurchInvitation.objects.filter(
+                church=self.church,
+                email=self.invited_user.email,
+                status=ChurchInvitation.Status.PENDING,
+                expires_at__gt=timezone.now(),
+            ).exists()
+        )
+
+    def test_decline_invite_requires_post(self):
+        self.client.logout()
+        invite = self.create_invitation(
+            self.church,
+            self.invited_user.email,
+            invited_by=self.admin,
+        )
+        self.client.force_login(self.invited_user)
+
+        response = self.client.get(reverse("decline_invite", args=[invite.token]))
+
+        invite.refresh_from_db()
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(invite.status, ChurchInvitation.Status.PENDING)
 
     def test_accept_invite_creates_membership_and_marks_notifications_read(self):
         self.client.logout()
