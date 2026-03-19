@@ -38,6 +38,57 @@ def _load_dotenv(path):
 
 _load_dotenv(BASE_DIR / '.env')
 
+
+def _env_bool(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _env_int(name, default):
+    value = os.environ.get(name)
+    if value is None or not value.strip():
+        return default
+    return int(value)
+
+
+def _build_database_config():
+    sqlite_url = f'sqlite:///{BASE_DIR / "db.sqlite3"}'
+    database_url = os.environ.get('DATABASE_URL', '').strip()
+    debug_enabled = _env_bool('DEBUG', default=False)
+
+    if database_url:
+        return {
+            **dj_database_url.parse(
+                database_url,
+                conn_max_age=_env_int('DATABASE_CONN_MAX_AGE', 600),
+                ssl_require=_env_bool('DATABASE_SSL_REQUIRE', not debug_enabled),
+            ),
+            'CONN_HEALTH_CHECKS': True,
+        }
+
+    postgres_name = os.environ.get('POSTGRES_DB', '').strip()
+    postgres_user = os.environ.get('POSTGRES_USER', '').strip()
+    postgres_password = os.environ.get('POSTGRES_PASSWORD', '').strip()
+    postgres_host = os.environ.get('POSTGRES_HOST', '').strip()
+    postgres_port = os.environ.get('POSTGRES_PORT', '5432').strip() or '5432'
+
+    if all([postgres_name, postgres_user, postgres_password, postgres_host]):
+        return {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': postgres_name,
+            'USER': postgres_user,
+            'PASSWORD': postgres_password,
+            'HOST': postgres_host,
+            'PORT': postgres_port,
+            'CONN_MAX_AGE': _env_int('DATABASE_CONN_MAX_AGE', 600),
+            'CONN_HEALTH_CHECKS': True,
+            'OPTIONS': {},
+        }
+
+    return dj_database_url.parse(sqlite_url, conn_max_age=0)
+
 # === NOM DE LA PLATEFORME ===
 # C'est ici qu'on change le nom affichÃ© partout sur le site
 APP_NAME = 'Ã‰glise SaaS'
@@ -48,7 +99,7 @@ if not SECRET_KEY:
     raise ImproperlyConfigured("SECRET_KEY manquant. DÃ©finir la variable d'environnement SECRET_KEY.")
 
 # Mode debug â€” False par dÃ©faut
-DEBUG = os.environ.get('DEBUG', '').lower() == 'true'
+DEBUG = _env_bool('DEBUG', default=False)
 
 allowed_hosts_env = os.environ.get('ALLOWED_HOSTS', '')
 if allowed_hosts_env:
@@ -129,9 +180,7 @@ WSGI_APPLICATION = 'eglise_saas_project.wsgi.application'
 # On utilise SQLite pour le dÃ©veloppement (pas besoin de MySQL).
 # Le fichier db.sqlite3 sera crÃ©Ã© automatiquement.
 DATABASES = {
-    'default': dj_database_url.config(
-        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}'
-    )
+    'default': _build_database_config(),
 }
 
 # Validation des mots de passe

@@ -43,7 +43,8 @@ Une plateforme Django où **n'importe quelle église** peut avoir son propre sit
 |---|---|---|
 | **Python** | 3.12.2 | Langage de programmation |
 | **Django** | 6.0.3 | Framework web (gère les routes, la BDD, l'authentification, l'admin) |
-| **SQLite** | intégré | Base de données (fichier `db.sqlite3`, aucune installation requise) |
+| **PostgreSQL** | 16+ recommandé | Base de données principale pour le développement sérieux et la production |
+| **SQLite** | intégré | Base de secours locale si aucune configuration PostgreSQL n'est fournie |
 | **Bootstrap 5** | 5.3 | Framework CSS pour un design responsive et professionnel |
 | **Bootstrap Icons** | 1.11 | Icônes vectorielles |
 | **Pillow** | 12.1.1 | Bibliothèque Python pour le traitement des images (upload logo/photos) |
@@ -119,6 +120,8 @@ eglise_saas/
 
 - **Python 3.12.2** installé → vérifier avec `python --version`
 - **pip** installé → vérifier avec `pip --version`
+- **PostgreSQL** installé localement si vous voulez sortir de SQLite
+- **pgAdmin 4** est facultatif : c'est un client d'administration, pas le serveur PostgreSQL
 
 ### Étape 1 — Cloner ou télécharger le projet
 
@@ -171,14 +174,56 @@ Cela installe :
 - `pillow` — traitement d'images pour les uploads
 - `django-crispy-forms` + `crispy-bootstrap5` — formulaires Bootstrap élégants
 
-### Étape 5 — Créer la base de données
+### Étape 5 — Configurer la base de données
 
-Django crée automatiquement les tables à partir des modèles Python :
+Le projet utilise PostgreSQL si les variables `DATABASE_URL` ou `POSTGRES_*` sont définies dans `.env`.
+Sinon, il retombe automatiquement sur SQLite (`db.sqlite3`).
+
+#### Option A — PostgreSQL local via Docker
+
+1. Installer Docker Desktop.
+2. Renseigner `.env` :
+
+```env
+POSTGRES_DB=eglise_saas
+POSTGRES_USER=eglise_user
+POSTGRES_PASSWORD=votre_mot_de_passe
+POSTGRES_HOST=127.0.0.1
+POSTGRES_PORT=5432
+DATABASE_CONN_MAX_AGE=600
+DATABASE_SSL_REQUIRE=False
+```
+
+3. Lancer PostgreSQL :
+
+```bash
+docker compose up -d postgres
+```
+
+4. Vérifier que le conteneur est prêt :
+
+```bash
+docker compose ps
+```
+
+5. Appliquer les migrations :
 
 ```bash
 python manage.py makemigrations
 python manage.py migrate
 ```
+
+Vous pouvez aussi utiliser une seule variable `DATABASE_URL` :
+
+```env
+DATABASE_URL=postgresql://eglise_user:votre_mot_de_passe@127.0.0.1:5432/eglise_saas
+```
+
+> Si vous utilisez `DATABASE_URL`, elle prend priorité sur `POSTGRES_*`.
+
+#### Option B — SQLite (fallback)
+
+Laissez les variables PostgreSQL vides dans `.env`. Django utilisera automatiquement `db.sqlite3`.
 
 ### Étape 6 — Charger les données de démonstration
 
