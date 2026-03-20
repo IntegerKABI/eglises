@@ -1,6 +1,10 @@
 """Superadmin tenant management views."""
 
+import logging
+
 from django.contrib import messages
+
+logger = logging.getLogger(__name__)
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Prefetch, Q
@@ -97,7 +101,7 @@ def _audit_superadmin_church_action(*, actor, church, action, metadata=None):
             metadata=metadata or {},
         )
     except Exception:
-        pass
+        logger.error(f"Failed to log superadmin action: {action}", exc_info=True)
 
 
 @login_required
@@ -216,7 +220,7 @@ def superadmin_church_create(request):
                             },
                         )
                     except Exception:
-                        pass
+                        logger.error("Failed to log tenant_assign_admin action", exc_info=True)
                 if invitation is not None:
                     try:
                         log_audit(
@@ -230,7 +234,7 @@ def superadmin_church_create(request):
                             },
                         )
                     except Exception:
-                        pass
+                        logger.error("Failed to log tenant_invite_admin action", exc_info=True)
 
             _schedule_safe_after_commit(after_commit)
 
@@ -248,6 +252,7 @@ def superadmin_church_create(request):
                 try:
                     _send_invite_email(request, invitation)
                 except Exception:
+                    logger.error("Failed to send invite email", exc_info=True)
                     email_error = True
                     messages.error(
                         request,

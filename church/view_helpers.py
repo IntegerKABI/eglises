@@ -1,6 +1,9 @@
 """Shared helpers for church views."""
 
 from datetime import timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 from django.conf import settings
 from django.contrib import messages
@@ -153,7 +156,7 @@ def _schedule_safe_after_commit(callback):
         try:
             callback()
         except Exception:
-            pass
+            logger.error("Failed to execute after-commit callback", exc_info=True)
 
     transaction.on_commit(wrapped)
 
@@ -253,7 +256,7 @@ def _handle_church_form(
                     metadata={"form": form.__class__.__name__},
                 )
             except Exception:
-                pass
+                logger.error(f"Failed to log audit for action {action}", exc_info=True)
             if after_save:
                 after_save(obj, is_created)
             if is_ajax(request):
@@ -295,7 +298,7 @@ def _handle_church_delete(request, model, pk, success_message, success_url_name,
                 instance=obj,
             )
         except Exception:
-            pass
+            logger.error("Failed to log audit for delete action", exc_info=True)
         obj.delete()
         if is_ajax(request):
             return JsonResponse({'success': True, 'message': success_message})

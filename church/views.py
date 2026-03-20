@@ -1,8 +1,11 @@
 """Dashboard views and the historical public import surface for the church app."""
 
 from datetime import timedelta
+import logging
 
 from django.contrib.auth import get_user_model
+
+logger = logging.getLogger(__name__)
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
@@ -204,7 +207,7 @@ def church_settings(request):
                         metadata={"section": "church_settings"},
                     )
                 except Exception:
-                    pass
+                    logger.error("Failed to log settings_update action", exc_info=True)
                 if is_ajax(request):
                     return JsonResponse({'success': True, 'message': 'Paramètres mis à jour avec succès !'})
                 messages.success(request, 'Paramètres mis à jour avec succès !')
@@ -645,7 +648,7 @@ def add_user(request):
                                 metadata={"role": role},
                             )
                         except Exception:
-                            pass
+                            logger.error("Failed to log membership_create action", exc_info=True)
                         notify_user_role_change(
                             church,
                             user,
@@ -702,7 +705,7 @@ def assign_user(request):
                                 metadata={"role": membership.role},
                             )
                         except Exception:
-                            pass
+                            logger.error("Failed to log membership_assign action", exc_info=True)
                         notify_user_role_change(
                             church,
                             membership.user,
@@ -752,7 +755,7 @@ def invite_user(request):
                     metadata={"email": invite.email, "role": invite.role},
                 )
             except Exception:
-                pass
+                logger.error("Failed to log invite_create action", exc_info=True)
             notify_church_admins(
                 church,
                 category="invite",
@@ -776,6 +779,7 @@ def invite_user(request):
             try:
                 _send_invite_email(request, invite)
             except Exception:
+                logger.error("Failed to send invite email", exc_info=True)
                 email_error = True
                 messages.error(request, "Invitation cr??e, mais l'email n'a pas pu ?tre envoy?.")
             if is_ajax(request):
@@ -815,7 +819,7 @@ def revoke_invite(request, pk):
                 metadata={"email": invite.email},
             )
         except Exception:
-            pass
+            logger.error("Failed to log invite_revoke action", exc_info=True)
         invited_user = get_user_model().objects.filter(email__iexact=invite.email).first()
         if invited_user:
             _mark_invite_notifications_read(invited_user, invite)
@@ -850,7 +854,7 @@ def resend_invite(request, pk):
                 metadata={"email": invite.email},
             )
         except Exception:
-            pass
+            logger.error("Failed to log invite_resend action", exc_info=True)
         try:
             _send_invite_email(request, invite)
             notify_church_admins(
@@ -863,6 +867,7 @@ def resend_invite(request, pk):
             )
             messages.success(request, "Invitation renvoy?e.")
         except Exception:
+            logger.error("Failed to resend invite email", exc_info=True)
             messages.error(request, "Impossible d'envoyer l'email pour le moment.")
     return redirect('manage_users')
 
@@ -910,7 +915,7 @@ def toggle_membership(request, pk):
                         metadata={"active": membership.is_active},
                     )
                 except Exception:
-                    pass
+                    logger.error("Failed to log membership_status action", exc_info=True)
                 notify_user_role_change(
                     church,
                     membership.user,
@@ -981,7 +986,7 @@ def transfer_admin(request):
                             metadata={"from_user": current_membership.user_id},
                         )
                     except Exception:
-                        pass
+                        logger.error("Failed to log membership_transfer_admin action", exc_info=True)
                     notify_user_role_change(
                         church,
                         target.user,
@@ -1059,7 +1064,7 @@ def edit_membership(request, pk):
                                     },
                                 )
                             except Exception:
-                                pass
+                                logger.error("Failed to log membership_update action", exc_info=True)
                             notify_user_role_change(
                                 church,
                                 membership.user,

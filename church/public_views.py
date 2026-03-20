@@ -1,6 +1,10 @@
 """Public-facing views and invitation flows."""
 
+import logging
+
 from django.contrib import messages
+
+logger = logging.getLogger(__name__)
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
@@ -242,7 +246,7 @@ def accept_invite(request, token):
                 metadata={"email": invite.email, "role": invite.role},
             )
         except Exception:
-            pass
+            logger.error("Failed to log invite_accept action", exc_info=True)
         notify_church_admins(
             invite.church,
             category="invite",
@@ -316,7 +320,7 @@ def decline_invite(request, token):
             metadata={"email": invite.email, "role": invite.role},
         )
     except Exception:
-        pass
+        logger.error("Failed to log invite_decline action", exc_info=True)
     notify_church_admins(
         invite.church,
         category="invite",

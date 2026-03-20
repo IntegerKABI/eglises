@@ -1,6 +1,10 @@
 """Notification, audit, and platform settings views."""
 
+import logging
+
 from django.contrib import messages
+
+logger = logging.getLogger(__name__)
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.http import JsonResponse
@@ -174,7 +178,7 @@ def site_settings(request):
                     metadata={"section": "site_settings"},
                 )
             except Exception:
-                pass
+                logger.error("Failed to log site settings update action", exc_info=True)
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': 'Paramètres de la plateforme mis à jour !'})
             messages.success(request, 'Paramètres de la plateforme mis à jour !')
