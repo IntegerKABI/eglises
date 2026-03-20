@@ -1149,6 +1149,9 @@ def read_message(request, pk):
         pk=pk,
         church=church,
     )
+    if request.method == 'GET' and msg.status == ContactMessage.Status.NEW:
+        msg.status = ContactMessage.Status.READ
+        msg.save(update_fields=['status', 'is_read'])
     reply_form = ContactMessageReplyForm()
     if request.method == 'POST':
         action = request.POST.get('action')

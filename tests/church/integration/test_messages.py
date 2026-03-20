@@ -26,10 +26,11 @@ class MessageWorkflowIntegrationTests(SaaSTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Urgent")
 
-    def test_read_message_actions_update_workflow_state(self):
+    def test_opening_read_message_marks_it_read_and_actions_update_workflow_state(self):
         self.login_to_church(self.secretary, self.church)
 
-        self.client.post(reverse("read_message", args=[self.message.pk]), {"action": "mark_read"})
+        response = self.client.get(reverse("read_message", args=[self.message.pk]))
+        self.assertEqual(response.status_code, 200)
         self.message.refresh_from_db()
         self.assertEqual(self.message.status, ContactMessage.Status.READ)
 
@@ -43,7 +44,7 @@ class MessageWorkflowIntegrationTests(SaaSTestCase):
 
         self.client.post(
             reverse("read_message", args=[self.message.pk]),
-            {"action": "respond", "body": "R?ponse envoy?e."},
+            {"action": "respond", "body": "Reponse envoyee."},
         )
         self.message.refresh_from_db()
         self.assertEqual(self.message.status, ContactMessage.Status.RESPONDED)
@@ -59,4 +60,3 @@ class MessageWorkflowIntegrationTests(SaaSTestCase):
         response = self.client.get(reverse("manage_messages"))
 
         self.assertRedirects(response, reverse("dashboard"), fetch_redirect_response=False)
-

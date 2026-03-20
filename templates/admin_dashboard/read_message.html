@@ -18,15 +18,6 @@
             Inconnu
         {% endif %}
     </span>
-    {% if msg.status == 'new' %}
-    <form method="post">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="mark_read">
-        <button type="submit" class="btn btn-church">
-            <i class="bi bi-check-lg"></i> Marquer comme lu
-        </button>
-    </form>
-    {% endif %}
     {% if msg.status != 'archived' %}
     <form method="post">
         {% csrf_token %}
