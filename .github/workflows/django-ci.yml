@@ -1,0 +1,127 @@
+name: Django CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-sqlite:
+    runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: ci-secret-key
+      DEBUG: "False"
+      ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate migrations
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Run SQLite test suite
+        run: python manage.py test
+
+  test-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: eglise_saas
+          POSTGRES_USER: eglise_user
+          POSTGRES_PASSWORD: eglise-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eglise_user -d eglise_saas"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      SECRET_KEY: ci-secret-key
+      DEBUG: "False"
+      ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+      DATABASE_URL: postgresql://eglise_user:eglise-password@127.0.0.1:5432/eglise_saas
+      DATABASE_CONN_MAX_AGE: "600"
+      DATABASE_SSL_REQUIRE: "False"
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate migrations
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Apply migrations
+        run: python manage.py migrate --noinput
+
+      - name: Run PostgreSQL locking regression tests
+        run: python manage.py test tests.church.integration.test_postgres_transactions
+
+      - name: Run full PostgreSQL test suite
+        run: python manage.py test
+
+  test-browser:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: eglise_saas
+          POSTGRES_USER: eglise_user
+          POSTGRES_PASSWORD: eglise-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eglise_user -d eglise_saas"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      SECRET_KEY: ci-secret-key
+      DEBUG: "False"
+      ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+      DATABASE_URL: postgresql://eglise_user:eglise-password@127.0.0.1:5432/eglise_saas
+      DATABASE_CONN_MAX_AGE: "600"
+      DATABASE_SSL_REQUIRE: "False"
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright browser
+        run: python -m playwright install --with-deps chromium
+
+      - name: Apply migrations
+        run: python manage.py migrate --noinput
+
+      - name: Run browser journeys
+        run: python manage.py test tests.church.e2e
