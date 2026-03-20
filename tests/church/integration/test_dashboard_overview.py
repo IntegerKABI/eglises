@@ -46,14 +46,15 @@ class DashboardOverviewIntegrationTests(SaaSTestCase):
         self.assertContains(response, "Membres actifs")
         self.assertContains(response, "Forfait")
 
-    def test_staff_dashboard_is_content_focused(self):
+    def test_staff_dashboard_stays_operational_without_plan_visibility(self):
         response = self._get_dashboard(self.staff)
 
         self.assertNotContains(response, "Plan et limites")
         self.assertContains(response, "Suivi du contenu")
         self.assertContains(response, "Pages actives")
+        self.assertContains(response, "Membres recents")
         self.assertNotContains(response, "Messages recents")
-        self.assertNotContains(response, "Membres recents")
+        self.assertNotContains(response, "Assignes a moi")
 
     def test_secretary_dashboard_is_operations_focused(self):
         response = self._get_dashboard(self.secretary)

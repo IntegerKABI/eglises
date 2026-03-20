@@ -34,9 +34,9 @@ ALL_CAPABILITIES = {
     CAP_VIEW_AUDIT,
 }
 
-# Finalized tenant role policy:
+# Tenant role policy:
 # - admin: full church administration except platform settings
-# - staff: content operations (events, sermons, pages)
+# - staff: content and member operations inside the tenant
 # - secretary: office workflow (messages, members, events, sermons)
 ROLE_CAPABILITIES = {
     ChurchMembership.Role.ADMIN: ALL_CAPABILITIES - {CAP_MANAGE_SITE_SETTINGS},
@@ -45,6 +45,7 @@ ROLE_CAPABILITIES = {
         CAP_MANAGE_EVENTS,
         CAP_MANAGE_SERMONS,
         CAP_MANAGE_PAGES,
+        CAP_MANAGE_MEMBERS,
     },
     ChurchMembership.Role.SECRETARY: {
         CAP_VIEW_DASHBOARD,
@@ -101,6 +102,7 @@ def get_churches_for_capability(user, capability):
             memberships__user=user,
             memberships__is_active=True,
             memberships__role__in=roles,
+            status__in=[Church.Status.ACTIVE, Church.Status.DRAFT],
         )
         .distinct()
         .order_by("name", "id")

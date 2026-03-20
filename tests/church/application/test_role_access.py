@@ -1,6 +1,6 @@
 from django.urls import reverse
 
-from church.models import ChurchMembership
+from church.models import Church, ChurchMembership
 from tests.factories import SaaSTestCase
 
 
@@ -19,6 +19,7 @@ class RoleAccessApplicationTests(SaaSTestCase):
         "dashboard",
         "manage_events",
         "manage_sermons",
+        "manage_members",
         "manage_pages",
     ]
     secretary_routes = [
@@ -59,8 +60,6 @@ class RoleAccessApplicationTests(SaaSTestCase):
         self._assert_routes_accessible(self.staff, self.staff_routes)
         response = self.client.get(reverse("manage_messages"))
         self.assertRedirects(response, reverse("dashboard"), fetch_redirect_response=False)
-        response = self.client.get(reverse("manage_members"))
-        self.assertRedirects(response, reverse("dashboard"), fetch_redirect_response=False)
 
     def test_secretary_route_matrix(self):
         self._assert_routes_accessible(self.secretary, self.secretary_routes)
@@ -83,3 +82,21 @@ class RoleAccessApplicationTests(SaaSTestCase):
         self.login_to_church(self.admin, self.church)
         response = self.client.get(reverse("edit_event", args=[self.event.pk]))
         self.assertEqual(response.status_code, 404)
+
+    def test_suspended_church_blocks_route_access_even_for_valid_role(self):
+        self.church.status = Church.Status.SUSPENDED
+        self.church.save(update_fields=["status", "is_active", "updated_at"])
+
+        self.login_to_church(self.staff, self.church)
+        response = self.client.get(reverse("manage_members"))
+
+        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
+
+    def test_archived_church_blocks_route_access_even_for_valid_role(self):
+        self.church.status = Church.Status.ARCHIVED
+        self.church.save(update_fields=["status", "is_active", "updated_at"])
+
+        self.login_to_church(self.secretary, self.church)
+        response = self.client.get(reverse("manage_messages"))
+
+        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
