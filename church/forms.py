@@ -210,13 +210,13 @@ class SuperAdminChurchStatusForm(forms.ModelForm):
 
 
 class SuperAdminChurchCreateForm(forms.ModelForm):
-    """Cree un tenant et son premier administrateur dans une transaction."""
+    """Cree un tenant puis invite ou rattache son premier administrateur."""
 
     admin_assignment_mode = forms.ChoiceField(
         label="Mode d'attribution de l'administrateur",
         choices=[
-            ('existing', "Associer un utilisateur existant"),
-            ('new', "Creer un nouvel utilisateur"),
+            ('existing', "Inviter un utilisateur existant"),
+            ('new', "Creer et rattacher un nouvel utilisateur"),
         ],
         initial='existing',
     )
@@ -291,21 +291,25 @@ class SuperAdminChurchCreateForm(forms.ModelForm):
         for field_name in ('country', 'primary_color', 'secondary_color'):
             if not cleaned_data.get(field_name):
                 cleaned_data[field_name] = self._meta.model._meta.get_field(field_name).default
+
         mode = cleaned_data.get('admin_assignment_mode')
         if mode == 'existing':
             self._clean_existing_admin(cleaned_data)
+            if cleaned_data.get('status') == Church.Status.ACTIVE:
+                self.add_error(
+                    'status',
+                    "Une eglise active doit etre creee avec un administrateur immediat. Utilisez le mode de creation de compte ou creez l'eglise en brouillon.",
+                )
         elif mode == 'new':
             self._clean_new_admin(cleaned_data)
+            if cleaned_data.get('status') == Church.Status.ACTIVE and self.admin_user is None:
+                self.add_error(
+                    'status',
+                    "Une eglise active doit etre creee avec un administrateur actif.",
+                )
         else:
             self.add_error('admin_assignment_mode', "Mode d'attribution invalide.")
 
-        if (
-            cleaned_data.get('status') == Church.Status.ACTIVE
-            and self.admin_user is None
-        ):
-            raise ValidationError(
-                "Une eglise active doit etre creee avec un administrateur actif."
-            )
         return cleaned_data
 
     def _clean_existing_admin(self, cleaned_data):
@@ -337,6 +341,12 @@ class SuperAdminChurchCreateForm(forms.ModelForm):
             self.add_error(
                 'existing_admin_identifier',
                 "L'utilisateur selectionne doit etre actif.",
+            )
+            return
+        if not (user.email or '').strip():
+            self.add_error(
+                'existing_admin_identifier',
+                "L'utilisateur selectionne doit avoir un email pour recevoir l'invitation.",
             )
             return
         try:
@@ -394,7 +404,7 @@ class SuperAdminChurchCreateForm(forms.ModelForm):
         self.admin_user = provisional_user
         self.create_new_admin = True
 
-    def save(self, commit=True):
+    def save(self, commit=True, invited_by=None):
         if not commit:
             raise ValueError("SuperAdminChurchCreateForm.save requires commit=True.")
         if self.admin_user is None:
@@ -402,21 +412,32 @@ class SuperAdminChurchCreateForm(forms.ModelForm):
 
         with transaction.atomic():
             church = super().save(commit=True)
-            enforce_limits_for_model(church, ChurchMembership)
             admin_user = self.admin_user
+            membership = None
+            invitation = None
             if self.create_new_admin:
+                enforce_limits_for_model(church, ChurchMembership)
                 admin_user.set_password(self.cleaned_data['new_admin_password1'])
                 admin_user.is_active = True
                 admin_user.save()
-            membership = ChurchMembership.objects.create(
-                user=admin_user,
-                church=church,
-                role=ChurchMembership.Role.ADMIN,
-                is_active=True,
-            )
+                membership = ChurchMembership.objects.create(
+                    user=admin_user,
+                    church=church,
+                    role=ChurchMembership.Role.ADMIN,
+                    is_active=True,
+                )
+            else:
+                enforce_limits_for_model(church, ChurchInvitation)
+                invitation = ChurchInvitation.objects.create(
+                    church=church,
+                    email=admin_user.email.strip().lower(),
+                    role=ChurchMembership.Role.ADMIN,
+                    invited_by=invited_by,
+                )
 
         self.created_admin_user = admin_user
         self.created_membership = membership
+        self.created_invitation = invitation
         return church
 
 

@@ -7,7 +7,7 @@
         <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
             <div>
                 <h1 class="h3 mb-1">{{ title }}</h1>
-                <p class="text-muted mb-0">Configuration du tenant, informations de contact et administrateur principal.</p>
+                <p class="text-muted mb-0">Configuration du tenant, informations de contact et administration initiale.</p>
             </div>
             <div>
                 <a class="btn btn-outline-secondary" href="{% if managed_church %}{% url 'superadmin_church_detail' managed_church.pk %}{% else %}{% url 'superadmin_church_list' %}{% endif %}">
@@ -83,17 +83,28 @@
 
                         {% if form.admin_assignment_mode %}
                         <div class="rounded border p-3">
-                            <h2 class="h5 mb-3">Premier administrateur</h2>
+                            <h2 class="h5 mb-3">Administration initiale</h2>
                             {{ form.admin_assignment_mode|as_crispy_field }}
-                            {{ form.existing_admin_identifier|as_crispy_field }}
-                            <hr>
-                            <div class="row g-3">
-                                <div class="col-md-6">{{ form.new_admin_username|as_crispy_field }}</div>
-                                <div class="col-md-6">{{ form.new_admin_email|as_crispy_field }}</div>
-                                <div class="col-md-6">{{ form.new_admin_first_name|as_crispy_field }}</div>
-                                <div class="col-md-6">{{ form.new_admin_last_name|as_crispy_field }}</div>
-                                <div class="col-md-6">{{ form.new_admin_password1|as_crispy_field }}</div>
-                                <div class="col-md-6">{{ form.new_admin_password2|as_crispy_field }}</div>
+
+                            <div id="existing-admin-section" class="mt-3">
+                                <div class="alert alert-light border small mb-3">
+                                    Cette option cree une invitation d'administration. L'utilisateur n'obtiendra l'acces au tenant qu'apres acceptation.
+                                </div>
+                                {{ form.existing_admin_identifier|as_crispy_field }}
+                            </div>
+
+                            <div id="new-admin-section" class="mt-3">
+                                <div class="alert alert-light border small mb-3">
+                                    Cette option cree immediatement le compte et rattache l'utilisateur comme administrateur actif du tenant.
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-6">{{ form.new_admin_username|as_crispy_field }}</div>
+                                    <div class="col-md-6">{{ form.new_admin_email|as_crispy_field }}</div>
+                                    <div class="col-md-6">{{ form.new_admin_first_name|as_crispy_field }}</div>
+                                    <div class="col-md-6">{{ form.new_admin_last_name|as_crispy_field }}</div>
+                                    <div class="col-md-6">{{ form.new_admin_password1|as_crispy_field }}</div>
+                                    <div class="col-md-6">{{ form.new_admin_password2|as_crispy_field }}</div>
+                                </div>
                             </div>
                         </div>
                         {% endif %}
@@ -107,4 +118,27 @@
         </form>
     </div>
 </div>
+
+{% if form.admin_assignment_mode %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const modeField = document.getElementById('id_admin_assignment_mode');
+        const existingSection = document.getElementById('existing-admin-section');
+        const newSection = document.getElementById('new-admin-section');
+
+        if (!modeField || !existingSection || !newSection) {
+            return;
+        }
+
+        function updateAdminMode() {
+            const isExistingMode = modeField.value === 'existing';
+            existingSection.classList.toggle('d-none', !isExistingMode);
+            newSection.classList.toggle('d-none', isExistingMode);
+        }
+
+        modeField.addEventListener('change', updateAdminMode);
+        updateAdminMode();
+    });
+</script>
+{% endif %}
 {% endblock %}

@@ -1,11 +1,17 @@
 from unittest.mock import patch
 
+from django.core import mail
+from django.test import override_settings
 from django.urls import reverse
 
-from church.models import AuditLog, Church, ChurchMembership
+from church.models import AuditLog, Church, ChurchInvitation, ChurchMembership
 from tests.factories import SaaSTestCase
 
 
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    DEFAULT_FROM_EMAIL="tests@example.com",
+)
 class SuperAdminChurchManagementIntegrationTests(SaaSTestCase):
     def setUp(self):
         super().setUp()
@@ -20,7 +26,7 @@ class SuperAdminChurchManagementIntegrationTests(SaaSTestCase):
     def _church_create_payload(self, **overrides):
         payload = {
             "name": "Grace Kin",
-            "status": Church.Status.ACTIVE,
+            "status": Church.Status.DRAFT,
             "plan": Church.Plan.GROWTH,
             "country": "RD Congo",
             "primary_color": "#2c3e50",
@@ -30,7 +36,7 @@ class SuperAdminChurchManagementIntegrationTests(SaaSTestCase):
         payload.update(overrides)
         return payload
 
-    def test_superadmin_can_create_tenant_with_existing_admin(self):
+    def test_superadmin_can_create_tenant_and_invite_existing_admin(self):
         self.client.force_login(self.superuser)
         candidate = self.create_user(
             username="candidate-admin",
@@ -44,17 +50,35 @@ class SuperAdminChurchManagementIntegrationTests(SaaSTestCase):
             )
 
         church = Church.objects.get(name="Grace Kin")
+        invitation = ChurchInvitation.objects.get(church=church, email=candidate.email)
         self.assertRedirects(response, reverse("superadmin_church_detail", args=[church.pk]))
-        self.assertTrue(
-            ChurchMembership.objects.filter(
-                user=candidate,
-                church=church,
-                role=ChurchMembership.Role.ADMIN,
-                is_active=True,
-            ).exists()
+        self.assertEqual(invitation.role, ChurchMembership.Role.ADMIN)
+        self.assertFalse(
+            ChurchMembership.objects.filter(user=candidate, church=church).exists()
         )
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(str(invitation.token), mail.outbox[0].body)
         self.assertTrue(AuditLog.objects.filter(church=church, action="tenant_create").exists())
-        self.assertTrue(AuditLog.objects.filter(church=church, action="tenant_assign_admin").exists())
+        self.assertTrue(AuditLog.objects.filter(church=church, action="tenant_invite_admin").exists())
+
+    def test_superadmin_create_rejects_active_status_for_invite_mode(self):
+        self.client.force_login(self.superuser)
+        candidate = self.create_user(
+            username="candidate-admin",
+            email="candidate-admin@example.com",
+        )
+
+        response = self.client.post(
+            reverse("superadmin_church_create"),
+            self._church_create_payload(
+                status=Church.Status.ACTIVE,
+                existing_admin_identifier=candidate.email,
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "administrateur immediat", status_code=200, html=False)
+        self.assertFalse(Church.objects.filter(name="Grace Kin").exists())
 
     def test_superadmin_create_rejects_existing_user_from_another_church(self):
         self.client.force_login(self.superuser)
@@ -76,6 +100,7 @@ class SuperAdminChurchManagementIntegrationTests(SaaSTestCase):
                 reverse("superadmin_church_create"),
                 self._church_create_payload(
                     name="Grace Lubumbashi",
+                    status=Church.Status.ACTIVE,
                     admin_assignment_mode="new",
                     new_admin_username="grace-admin",
                     new_admin_email="grace-admin@example.com",
@@ -96,21 +121,22 @@ class SuperAdminChurchManagementIntegrationTests(SaaSTestCase):
                 user__username="grace-admin",
             ).exists()
         )
+        self.assertFalse(ChurchInvitation.objects.filter(church=church).exists())
 
-    def test_superadmin_create_flow_rolls_back_on_membership_failure(self):
+    def test_superadmin_create_flow_rolls_back_on_invitation_failure(self):
         self.client.force_login(self.superuser)
+        candidate = self.create_user(
+            username="rollback-candidate",
+            email="rollback-candidate@example.com",
+        )
 
-        with patch("church.forms.ChurchMembership.objects.create", side_effect=RuntimeError("boom")):
+        with patch("church.forms.ChurchInvitation.objects.create", side_effect=RuntimeError("boom")):
             with self.assertRaises(RuntimeError):
                 self.client.post(
                     reverse("superadmin_church_create"),
                     self._church_create_payload(
                         name="Rollback Church",
-                        admin_assignment_mode="new",
-                        new_admin_username="rollback-admin",
-                        new_admin_email="rollback-admin@example.com",
-                        new_admin_password1=self.password,
-                        new_admin_password2=self.password,
+                        existing_admin_identifier=candidate.email,
                     ),
                 )
 

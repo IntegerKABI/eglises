@@ -1,10 +1,8 @@
 """Superadmin tenant management views."""
 
 from django.contrib import messages
-from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db import transaction
 from django.db.models import Count, Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -18,16 +16,17 @@ from .forms import (
     SuperAdminChurchUpdateForm,
 )
 from .limits import get_plan_usage
-from .models import AuditLog, Church, ChurchMembership
+from .models import AuditLog, Church, ChurchMembership, Notification
+from .notifications import notify_user
 from .permissions import CAP_MANAGE_SITE_SETTINGS, require_capability
-from .view_helpers import _querystring_without_page, _schedule_safe_after_commit, is_ajax
+from .view_helpers import _querystring_without_page, _schedule_safe_after_commit, _send_invite_email, is_ajax
 
 
 def _superadmin_church_queryset():
     admin_memberships = ChurchMembership.objects.filter(
         role=ChurchMembership.Role.ADMIN,
         is_active=True,
-    ).select_related('user')
+    ).select_related('user').order_by('user__first_name', 'user__last_name', 'user__username')
     return (
         Church.objects.all()
         .prefetch_related(
@@ -190,7 +189,9 @@ def superadmin_church_create(request):
     if request.method == 'POST':
         form = SuperAdminChurchCreateForm(request.POST, request.FILES)
         if form.is_valid():
-            church = form.save()
+            church = form.save(invited_by=request.user)
+            invitation = getattr(form, 'created_invitation', None)
+            membership = getattr(form, 'created_membership', None)
 
             def after_commit():
                 _audit_superadmin_church_action(
@@ -202,31 +203,68 @@ def superadmin_church_create(request):
                         'plan': church.plan,
                     },
                 )
-                try:
-                    log_audit(
-                        actor=request.user,
-                        church=church,
-                        action='tenant_assign_admin',
-                        instance=form.created_membership,
-                        metadata={
-                            'user_id': form.created_admin_user.pk,
-                            'username': form.created_admin_user.username,
-                        },
-                    )
-                except Exception:
-                    pass
+                if membership is not None:
+                    try:
+                        log_audit(
+                            actor=request.user,
+                            church=church,
+                            action='tenant_assign_admin',
+                            instance=membership,
+                            metadata={
+                                'user_id': form.created_admin_user.pk,
+                                'username': form.created_admin_user.username,
+                            },
+                        )
+                    except Exception:
+                        pass
+                if invitation is not None:
+                    try:
+                        log_audit(
+                            actor=request.user,
+                            church=church,
+                            action='tenant_invite_admin',
+                            instance=invitation,
+                            metadata={
+                                'email': invitation.email,
+                                'user_id': form.created_admin_user.pk,
+                            },
+                        )
+                    except Exception:
+                        pass
 
             _schedule_safe_after_commit(after_commit)
+
+            email_error = False
+            success_message = "Eglise creee avec son premier administrateur."
+            if invitation is not None:
+                notify_user(
+                    form.created_admin_user,
+                    church,
+                    Notification.Category.INVITE,
+                    "Invitation a administrer une eglise",
+                    body=f"Vous avez ete invite a administrer {church.name}.",
+                    link=reverse('accept_invite', args=[invitation.token]),
+                )
+                try:
+                    _send_invite_email(request, invitation)
+                except Exception:
+                    email_error = True
+                    messages.error(
+                        request,
+                        "Eglise creee, mais l'email d'invitation n'a pas pu etre envoye.",
+                    )
+                success_message = "Eglise creee et invitation admin envoyee."
 
             if is_ajax(request):
                 return JsonResponse(
                     {
                         'success': True,
-                        'message': "Eglise creee avec son premier administrateur.",
+                        'message': success_message,
                         'redirect': reverse('superadmin_church_detail', args=[church.pk]),
                     }
                 )
-            messages.success(request, "Eglise creee avec son premier administrateur.")
+            if not email_error or invitation is None:
+                messages.success(request, success_message)
             return redirect('superadmin_church_detail', pk=church.pk)
         if is_ajax(request):
             return JsonResponse({'success': False, 'errors': form.errors}, status=400)
@@ -400,4 +438,3 @@ def superadmin_switch_church(request, pk):
     request.session['active_church_id'] = managed_church.pk
     messages.success(request, f"Contexte bascule sur {managed_church.name}.")
     return redirect('dashboard')
-
