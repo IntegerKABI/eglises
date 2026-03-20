@@ -1,14 +1,4 @@
-"""
-=================================================================
-FORMULAIRES — Validation et affichage des formulaires
-=================================================================
-Django génère automatiquement les formulaires à partir des modèles.
-On les personnalise ici pour :
-- Choisir quels champs afficher
-- Ajouter des widgets HTML (datepicker, textarea, etc.)
-- Définir les règles de validation
-=================================================================
-"""
+"""Form classes for church domain validation and UI binding."""
 
 from django import forms
 from django.contrib.auth import get_user_model
@@ -47,7 +37,7 @@ PLAN_OVERRIDE_FIELDS = [
 
 
 class ChurchForm(forms.ModelForm):
-    """Formulaire de configuration d'une église."""
+    """Edit the tenant-facing church profile settings."""
     class Meta:
         model = Church
         fields = [
@@ -67,7 +57,7 @@ class ChurchForm(forms.ModelForm):
 
 
 class EventForm(forms.ModelForm):
-    """Formulaire de création/modification d'un événement."""
+    """Create or update an event."""
     class Meta:
         model = Event
         fields = ['title', 'description', 'image', 'event_date', 'event_time',
@@ -93,7 +83,7 @@ class EventForm(forms.ModelForm):
 
 
 class SermonForm(forms.ModelForm):
-    """Formulaire de création/modification d'une prédication."""
+    """Create or update a sermon."""
     class Meta:
         model = Sermon
         fields = ['title', 'preacher', 'description', 'image', 'video_url',
@@ -107,7 +97,7 @@ class SermonForm(forms.ModelForm):
 
 
 class MemberForm(forms.ModelForm):
-    """Formulaire d'ajout/modification d'un membre."""
+    """Create or update a member record."""
     class Meta:
         model = Member
         fields = ['first_name', 'last_name', 'email', 'phone', 'address',
@@ -121,7 +111,7 @@ class MemberForm(forms.ModelForm):
 
 
 class PageForm(forms.ModelForm):
-    """Formulaire de création/modification d'une page."""
+    """Create or update a custom page."""
     class Meta:
         model = Page
         fields = ['title', 'content', 'image', 'sort_order', 'is_in_menu',
@@ -133,7 +123,7 @@ class PageForm(forms.ModelForm):
 
 
 class ContactForm(forms.ModelForm):
-    """Formulaire de contact public (visiteurs du site)."""
+    """Validate public contact form submissions."""
     class Meta:
         model = ContactMessage
         fields = ['sender_name', 'sender_email', 'subject', 'message']
@@ -143,7 +133,7 @@ class ContactForm(forms.ModelForm):
 
 
 class SiteSettingsForm(forms.ModelForm):
-    """Formulaire des paramètres globaux de la plateforme (super-admin)."""
+    """Edit global platform settings."""
     class Meta:
         model = SiteSettings
         fields = ['site_name', 'site_slogan', 'site_description', 'site_logo', 'cover_image', 'contact_email']
@@ -153,7 +143,7 @@ class SiteSettingsForm(forms.ModelForm):
 
 
 class SuperAdminChurchUpdateForm(forms.ModelForm):
-    """Met a jour le profil d'un tenant sans toucher a son plan ni a son statut."""
+    """Update tenant profile fields without touching plan or lifecycle state."""
 
     class Meta:
         model = Church
@@ -174,7 +164,7 @@ class SuperAdminChurchUpdateForm(forms.ModelForm):
 
 
 class SuperAdminChurchPlanForm(forms.ModelForm):
-    """Met a jour le plan SaaS et les limites surchargees d'un tenant."""
+    """Update the SaaS plan and override limits for a tenant."""
 
     class Meta:
         model = Church
@@ -186,7 +176,7 @@ class SuperAdminChurchPlanForm(forms.ModelForm):
 
 
 class SuperAdminChurchStatusForm(forms.ModelForm):
-    """Valide les transitions de statut d'un tenant."""
+    """Validate tenant lifecycle state transitions."""
 
     class Meta:
         model = Church
@@ -210,7 +200,7 @@ class SuperAdminChurchStatusForm(forms.ModelForm):
 
 
 class SuperAdminChurchCreateForm(forms.ModelForm):
-    """Cree un tenant puis invite ou rattache son premier administrateur."""
+    """Create a tenant and either invite or attach its first administrator."""
 
     admin_assignment_mode = forms.ChoiceField(
         label="Mode d'attribution de l'administrateur",

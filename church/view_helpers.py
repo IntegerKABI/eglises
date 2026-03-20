@@ -1,4 +1,4 @@
-"""Utilitaires partages pour les vues church."""
+"""Shared helpers for church views."""
 
 from datetime import timedelta
 
@@ -67,7 +67,7 @@ class TenantLoginView(LoginView):
 
 
 def is_ajax(request):
-    """Vérifie si la requête est AJAX."""
+    """Return whether the request was sent through AJAX."""
     return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
 

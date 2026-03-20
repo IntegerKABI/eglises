@@ -1,4 +1,4 @@
-"""Modeles metier du module church."""
+"""Domain models for the church application."""
 
 from uuid import uuid4
 
@@ -27,18 +27,12 @@ from .model_helpers import (
 
 
 class Church(models.Model):
-    """
-    TABLE CENTRALE â€” ReprÃ©sente une Ã©glise.
-    
-    Chaque Ã©glise qui utilise la plateforme a une ligne ici.
-    Le champ 'slug' sert d'identifiant dans l'URL.
-    Exemple : /eglise/vie-nouvelle/ â†’ slug = "vie-nouvelle"
-    """
+    """Represent a church tenant hosted on the platform."""
     class Status(models.TextChoices):
         DRAFT = 'draft', 'Brouillon'
         ACTIVE = 'active', 'Active'
         SUSPENDED = 'suspended', 'Suspendue'
-        ARCHIVED = 'archived', 'ArchivÃ©e'
+        ARCHIVED = 'archived', 'Archivée'
 
     class Plan(models.TextChoices):
         STARTER = 'starter', 'Starter'
@@ -47,13 +41,13 @@ class Church(models.Model):
 
     name = models.CharField(
         max_length=255,
-        verbose_name="Nom de l'Ã©glise"
+        verbose_name="Nom de l'église"
     )
     slug = models.SlugField(
         max_length=100,
         unique=True,
         verbose_name="Identifiant URL",
-        help_text="GÃ©nÃ©rÃ© automatiquement Ã  partir du nom. Ex: 'vie-nouvelle'"
+        help_text="Généré automatiquement à partir du nom. Ex: 'vie-nouvelle'"
     )
     description = models.TextField(
         blank=True,
@@ -71,25 +65,20 @@ class Church(models.Model):
         null=True,
         verbose_name="Image de couverture"
     )
-
-    # CoordonnÃ©es
     address = models.CharField(max_length=500, blank=True, verbose_name="Adresse")
     city = models.CharField(max_length=100, blank=True, verbose_name="Ville")
     country = models.CharField(max_length=100, default="RD Congo", verbose_name="Pays")
-    phone = models.CharField(max_length=50, blank=True, verbose_name="TÃ©lÃ©phone")
+    phone = models.CharField(max_length=50, blank=True, verbose_name="Téléphone")
     email = models.EmailField(blank=True, verbose_name="Email")
-
-    # RÃ©seaux sociaux
     facebook = models.URLField(blank=True, verbose_name="Facebook")
     youtube = models.URLField(blank=True, verbose_name="YouTube")
     instagram = models.URLField(blank=True, verbose_name="Instagram")
 
-    # Personnalisation visuelle
     primary_color = models.CharField(
         max_length=7,
         default='#2c3e50',
         verbose_name="Couleur principale",
-        help_text="Code hexadÃ©cimal, ex: #2c3e50"
+        help_text="Code hexadécimal, ex: #2c3e50"
     )
     secondary_color = models.CharField(
         max_length=7,
@@ -97,11 +86,10 @@ class Church(models.Model):
         verbose_name="Couleur secondaire"
     )
 
-    # Contenu
     welcome_message = models.TextField(
         blank=True,
         verbose_name="Message d'accueil",
-        help_text="AffichÃ© sur la page d'accueil"
+        help_text="Affiché sur la page d'accueil"
     )
     service_times = models.TextField(
         blank=True,
@@ -183,15 +171,15 @@ class Church(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "Ã‰glise"
-        verbose_name_plural = "Ã‰glises"
+        verbose_name = "Église"
+        verbose_name_plural = "Églises"
         ordering = ['name']
 
     def __str__(self):
         return self.name
 
     def save(self, *args, **kwargs):
-        """GÃ©nÃ¨re automatiquement le slug Ã  partir du nom."""
+        """Generate a unique slug from the church name."""
         queryset = Church.objects.all()
         if self.pk:
             queryset = queryset.exclude(pk=self.pk)
@@ -228,7 +216,7 @@ class ChurchMembership(models.Model):
     class Role(models.TextChoices):
         ADMIN = 'admin', "Administrateur"
         STAFF = 'staff', "Staff"
-        SECRETARY = 'secretary', "SecrÃ©taire"
+        SECRETARY = 'secretary', "Secrétaire"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -240,21 +228,21 @@ class ChurchMembership(models.Model):
         Church,
         on_delete=models.CASCADE,
         related_name='memberships',
-        verbose_name="Ã‰glise",
+        verbose_name="Église",
     )
     role = models.CharField(
         max_length=20,
         choices=Role.choices,
         default=Role.STAFF,
-        verbose_name="RÃ´le",
+        verbose_name="Rôle",
     )
     is_active = models.BooleanField(default=True, verbose_name="Actif")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "Membre d'Ã©glise"
-        verbose_name_plural = "Membres d'Ã©glise"
+        verbose_name = "Membre d'église"
+        verbose_name_plural = "Membres d'église"
         unique_together = ['user', 'church']
         indexes = [
             models.Index(fields=['church', 'role', 'is_active'], name='chm_ch_role_active_idx'),
@@ -262,7 +250,7 @@ class ChurchMembership(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.user} â€” {self.church} ({self.get_role_display()})"
+        return f"{self.user} — {self.church} ({self.get_role_display()})"
 
     def clean(self):
         super().clean()
@@ -277,23 +265,23 @@ class ChurchMembership(models.Model):
 class ChurchInvitation(models.Model):
     class Status(models.TextChoices):
         PENDING = 'pending', 'En attente'
-        ACCEPTED = 'accepted', 'AcceptÃ©e'
-        DECLINED = 'declined', 'RefusÃ©e'
-        REVOKED = 'revoked', 'RÃ©voquÃ©e'
-        EXPIRED = 'expired', 'ExpirÃ©e'
+        ACCEPTED = 'accepted', 'Acceptée'
+        DECLINED = 'declined', 'Refusée'
+        REVOKED = 'revoked', 'Révoquée'
+        EXPIRED = 'expired', 'Expirée'
 
     church = models.ForeignKey(
         Church,
         on_delete=models.CASCADE,
         related_name='invitations',
-        verbose_name="Ã‰glise",
+        verbose_name="Église",
     )
     email = models.EmailField(verbose_name="Email")
     role = models.CharField(
         max_length=20,
         choices=ChurchMembership.Role.choices,
         default=ChurchMembership.Role.STAFF,
-        verbose_name="RÃ´le",
+        verbose_name="Rôle",
     )
     invited_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -301,7 +289,7 @@ class ChurchInvitation(models.Model):
         null=True,
         blank=True,
         related_name='sent_church_invitations',
-        verbose_name="InvitÃ© par",
+        verbose_name="Invité par",
     )
     token = models.UUIDField(default=uuid4, unique=True, editable=False)
     status = models.CharField(
@@ -321,19 +309,19 @@ class ChurchInvitation(models.Model):
         null=True,
         blank=True,
         related_name='accepted_church_invitations',
-        verbose_name="AcceptÃ©e par",
+        verbose_name="Acceptée par",
     )
 
     class Meta:
-        verbose_name = "Invitation d'Ã©glise"
-        verbose_name_plural = "Invitations d'Ã©glise"
+        verbose_name = "Invitation d'église"
+        verbose_name_plural = "Invitations d'église"
         indexes = [
             models.Index(fields=['church', 'status'], name='ch_inv_ch_status_idx'),
             models.Index(fields=['email', 'status'], name='ch_inv_email_status_idx'),
         ]
 
     def __str__(self):
-        return f"{self.email} â€” {self.church} ({self.get_role_display()})"
+        return f"{self.email} — {self.church} ({self.get_role_display()})"
 
     @property
     def is_expired(self):
@@ -341,15 +329,12 @@ class ChurchInvitation(models.Model):
 
 
 class Event(models.Model):
-    """
-    Ã‰VÃ‰NEMENTS â€” Cultes spÃ©ciaux, sÃ©minaires, concerts, etc.
-    Chaque Ã©vÃ©nement appartient Ã  UNE Ã©glise (ForeignKey).
-    """
+    """Store a church event with publication and visibility controls."""
     church = models.ForeignKey(
         Church,
-        on_delete=models.CASCADE,  # Si l'Ã©glise est supprimÃ©e, ses Ã©vÃ©nements aussi
+        on_delete=models.CASCADE,
         related_name='events',
-        verbose_name="Ã‰glise"
+        verbose_name="Église"
     )
     title = models.CharField(max_length=255, verbose_name="Titre")
     slug = models.SlugField(max_length=120, verbose_name="Identifiant URL")
@@ -366,7 +351,7 @@ class Event(models.Model):
         null=True,
         blank=True,
         related_name='created_events',
-        verbose_name="CrÃ©Ã© par",
+        verbose_name="Créé par",
     )
     event_date = models.DateField(verbose_name="Date", db_index=True)
     event_time = models.TimeField(blank=True, null=True, verbose_name="Heure")
@@ -374,9 +359,9 @@ class Event(models.Model):
     location = models.CharField(max_length=255, blank=True, verbose_name="Lieu")
     visibility = models.CharField(
         max_length=20,
-        choices=[('public', 'Public'), ('private', 'PrivÃ©'), ('draft', 'Brouillon')],
+        choices=[('public', 'Public'), ('private', 'Privé'), ('draft', 'Brouillon')],
         default='public',
-        verbose_name="VisibilitÃ©",
+        verbose_name="Visibilité",
     )
     published_at = models.DateTimeField(blank=True, null=True, verbose_name="Date de publication")
     is_featured = models.BooleanField(default=False, verbose_name="Mis en avant")
@@ -384,9 +369,9 @@ class Event(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = "Ã‰vÃ©nement"
-        verbose_name_plural = "Ã‰vÃ©nements"
-        ordering = ['-event_date']  # Les plus rÃ©cents en premier
+        verbose_name = "Événement"
+        verbose_name_plural = "Événements"
+        ordering = ['-event_date']  # Les plus récents en premier
         indexes = [
             models.Index(fields=['church', 'is_active', 'event_date']),
             models.Index(fields=['church', 'is_featured']),
@@ -426,18 +411,16 @@ class Event(models.Model):
         super().save(*args, **kwargs)
 
 class Sermon(models.Model):
-    """
-    PRÃ‰DICATIONS â€” Messages, enseignements, avec lien vidÃ©o/audio.
-    """
+    """Store a sermon with media links and publishing controls."""
     church = models.ForeignKey(
         Church,
         on_delete=models.CASCADE,
         related_name='sermons',
-        verbose_name="Ã‰glise"
+        verbose_name="Église"
     )
     title = models.CharField(max_length=255, verbose_name="Titre")
     slug = models.SlugField(max_length=120, verbose_name="Identifiant URL")
-    preacher = models.CharField(max_length=150, blank=True, verbose_name="PrÃ©dicateur")
+    preacher = models.CharField(max_length=150, blank=True, verbose_name="Prédicateur")
     description = models.TextField(blank=True, verbose_name="Description")
     image = models.ImageField(
         upload_to=upload_sermon_image,
@@ -451,22 +434,22 @@ class Sermon(models.Model):
         null=True,
         blank=True,
         related_name='created_sermons',
-        verbose_name="CrÃ©Ã© par",
+        verbose_name="Créé par",
     )
-    video_url = models.URLField(blank=True, verbose_name="Lien vidÃ©o (YouTube)")
+    video_url = models.URLField(blank=True, verbose_name="Lien vidéo (YouTube)")
     audio_url = models.URLField(blank=True, verbose_name="Lien audio")
     sermon_date = models.DateField(blank=True, null=True, verbose_name="Date", db_index=True)
     bible_reference = models.CharField(
         max_length=255,
         blank=True,
-        verbose_name="RÃ©fÃ©rence biblique",
+        verbose_name="Référence biblique",
         help_text="Ex: Jean 3:16"
     )
     visibility = models.CharField(
         max_length=20,
-        choices=[('public', 'Public'), ('private', 'PrivÃ©'), ('draft', 'Brouillon')],
+        choices=[('public', 'Public'), ('private', 'Privé'), ('draft', 'Brouillon')],
         default='public',
-        verbose_name="VisibilitÃ©",
+        verbose_name="Visibilité",
     )
     published_at = models.DateTimeField(blank=True, null=True, verbose_name="Date de publication")
     is_featured = models.BooleanField(default=False, verbose_name="Mis en avant")
@@ -475,8 +458,8 @@ class Sermon(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = "PrÃ©dication"
-        verbose_name_plural = "PrÃ©dications"
+        verbose_name = "Prédication"
+        verbose_name_plural = "Prédications"
         ordering = ['-sermon_date']
         indexes = [
             models.Index(fields=['church', 'is_active', 'sermon_date']),
@@ -506,24 +489,22 @@ class Sermon(models.Model):
 
 
 class Member(models.Model):
-    """
-    MEMBRES â€” Registre des membres de l'Ã©glise.
-    """
+    """Store member records for a church directory and operations workflow."""
     GENDER_CHOICES = [
         ('M', 'Masculin'),
-        ('F', 'FÃ©minin'),
+        ('F', 'Féminin'),
     ]
 
     church = models.ForeignKey(
         Church,
         on_delete=models.CASCADE,
         related_name='members',
-        verbose_name="Ã‰glise"
+        verbose_name="Église"
     )
-    first_name = models.CharField(max_length=100, verbose_name="PrÃ©nom")
+    first_name = models.CharField(max_length=100, verbose_name="Prénom")
     last_name = models.CharField(max_length=100, verbose_name="Nom")
     email = models.EmailField(blank=True, verbose_name="Email")
-    phone = models.CharField(max_length=50, blank=True, verbose_name="TÃ©lÃ©phone")
+    phone = models.CharField(max_length=50, blank=True, verbose_name="Téléphone")
     address = models.CharField(max_length=500, blank=True, verbose_name="Adresse")
     birth_date = models.DateField(blank=True, null=True, verbose_name="Date de naissance")
     gender = models.CharField(
@@ -532,11 +513,11 @@ class Member(models.Model):
         blank=True,
         verbose_name="Genre"
     )
-    membership_date = models.DateField(blank=True, null=True, verbose_name="Date d'adhÃ©sion")
+    membership_date = models.DateField(blank=True, null=True, verbose_name="Date d'adhésion")
     department = models.CharField(
         max_length=100,
         blank=True,
-        verbose_name="DÃ©partement/MinistÃ¨re"
+        verbose_name="Département/Ministère"
     )
     directory_consent = models.BooleanField(
         default=False,
@@ -551,7 +532,7 @@ class Member(models.Model):
     directory_consent_at = models.DateTimeField(
         blank=True,
         null=True,
-        verbose_name="Consentement donnÃ© le",
+        verbose_name="Consentement donné le",
     )
     photo = models.ImageField(
         upload_to=upload_member_photo,
@@ -580,7 +561,7 @@ class Member(models.Model):
         super().clean()
         if self.directory_consent and not self.directory_consent_source:
             raise ValidationError({
-                "directory_consent_source": "PrÃ©cisez la source du consentement.",
+                "directory_consent_source": "Précisez la source du consentement.",
             })
 
     @property
@@ -598,15 +579,12 @@ class Member(models.Model):
 
 
 class Page(models.Model):
-    """
-    PAGES DYNAMIQUES â€” Pages personnalisables (Ã€ propos, MinistÃ¨res, etc.)
-    Chaque Ã©glise peut crÃ©er ses propres pages.
-    """
+    """Store a custom church page with publication controls."""
     church = models.ForeignKey(
         Church,
         on_delete=models.CASCADE,
         related_name='pages',
-        verbose_name="Ã‰glise"
+        verbose_name="Église"
     )
     title = models.CharField(max_length=255, verbose_name="Titre")
     slug = models.SlugField(max_length=100, verbose_name="Identifiant URL")
@@ -623,15 +601,15 @@ class Page(models.Model):
         null=True,
         blank=True,
         related_name='created_pages',
-        verbose_name="CrÃ©Ã© par",
+        verbose_name="Créé par",
     )
     sort_order = models.IntegerField(default=0, verbose_name="Ordre d'affichage")
     is_in_menu = models.BooleanField(default=True, verbose_name="Afficher dans le menu")
     visibility = models.CharField(
         max_length=20,
-        choices=[('public', 'Public'), ('private', 'PrivÃ©'), ('draft', 'Brouillon')],
+        choices=[('public', 'Public'), ('private', 'Privé'), ('draft', 'Brouillon')],
         default='public',
-        verbose_name="VisibilitÃ©",
+        verbose_name="Visibilité",
     )
     published_at = models.DateTimeField(blank=True, null=True, verbose_name="Date de publication")
     is_active = models.BooleanField(default=True, verbose_name="Active")
@@ -642,7 +620,7 @@ class Page(models.Model):
         verbose_name = "Page"
         verbose_name_plural = "Pages"
         ordering = ['sort_order']
-        unique_together = ['church', 'slug']  # Un slug unique PAR Ã©glise
+        unique_together = ['church', 'slug']  # Un slug unique PAR église
         indexes = [
             models.Index(fields=['church', 'is_active', 'is_in_menu']),
             models.Index(fields=['church', 'sort_order']),
@@ -669,20 +647,18 @@ class Page(models.Model):
 
 
 class ContactMessage(models.Model):
-    """
-    MESSAGES DE CONTACT â€” ReÃ§us via le formulaire du site public.
-    """
+    """Store public contact form submissions for a church."""
     class Status(models.TextChoices):
         NEW = 'new', 'Nouveau'
         READ = 'read', 'Lu'
-        RESPONDED = 'responded', 'RÃ©pondu'
-        ARCHIVED = 'archived', 'ArchivÃ©'
+        RESPONDED = 'responded', 'Répondu'
+        ARCHIVED = 'archived', 'Archivé'
 
     church = models.ForeignKey(
         Church,
         on_delete=models.CASCADE,
         related_name='messages',
-        verbose_name="Ã‰glise"
+        verbose_name="Église"
     )
     sender_name = models.CharField(max_length=150, verbose_name="Nom")
     sender_email = models.EmailField(verbose_name="Email")
@@ -701,18 +677,18 @@ class ContactMessage(models.Model):
         null=True,
         blank=True,
         related_name='assigned_contact_messages',
-        verbose_name="AssignÃ© Ã ",
+        verbose_name="Assigné à",
     )
-    responded_at = models.DateTimeField(null=True, blank=True, verbose_name="RÃ©pondu le")
+    responded_at = models.DateTimeField(null=True, blank=True, verbose_name="Répondu le")
     responded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='responded_contact_messages',
-        verbose_name="RÃ©pondu par",
+        verbose_name="Répondu par",
     )
-    archived_at = models.DateTimeField(null=True, blank=True, verbose_name="ArchivÃ© le")
+    archived_at = models.DateTimeField(null=True, blank=True, verbose_name="Archivé le")
     is_read = models.BooleanField(default=False, verbose_name="Lu")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -727,7 +703,7 @@ class ContactMessage(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.sender_name} â€” {self.subject}"
+        return f"{self.sender_name} — {self.subject}"
 
     def save(self, *args, **kwargs):
         if not self.status:
@@ -745,42 +721,42 @@ class ContactMessageReply(models.Model):
         related_name='replies',
         verbose_name="Message",
     )
-    body = models.TextField(verbose_name="RÃ©ponse")
+    body = models.TextField(verbose_name="Réponse")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='contact_message_replies',
-        verbose_name="RÃ©pondu par",
+        verbose_name="Répondu par",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = "RÃ©ponse au message"
-        verbose_name_plural = "RÃ©ponses aux messages"
+        verbose_name = "Réponse au message"
+        verbose_name_plural = "Réponses aux messages"
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['message', 'created_at'], name='cmr_msg_cr_idx'),
         ]
 
     def __str__(self):
-        return f"RÃ©ponse {self.pk} - {self.message_id}"
+        return f"Réponse {self.pk} - {self.message_id}"
 
 
 class Notification(models.Model):
     class Category(models.TextChoices):
         INVITE = 'invite', 'Invitation'
-        ROLE = 'role', 'Changement de rÃ´le'
+        ROLE = 'role', 'Changement de rôle'
         MESSAGE = 'message', 'Nouveau message'
-        EVENT = 'event', 'Changement Ã©vÃ©nement'
-        SERMON = 'sermon', 'Changement prÃ©dication'
+        EVENT = 'event', 'Changement événement'
+        SERMON = 'sermon', 'Changement prédication'
 
     church = models.ForeignKey(
         Church,
         on_delete=models.CASCADE,
         related_name='notifications',
-        verbose_name="Ã‰glise",
+        verbose_name="Église",
     )
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -792,7 +768,7 @@ class Notification(models.Model):
         max_length=20,
         choices=Category.choices,
         db_index=True,
-        verbose_name="CatÃ©gorie",
+        verbose_name="Catégorie",
     )
     title = models.CharField(max_length=255, verbose_name="Titre")
     body = models.TextField(blank=True, verbose_name="Message")
@@ -820,7 +796,7 @@ class AuditLog(models.Model):
         related_name='audit_logs',
         null=True,
         blank=True,
-        verbose_name="Ã‰glise",
+        verbose_name="Église",
     )
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -833,8 +809,8 @@ class AuditLog(models.Model):
     action = models.CharField(max_length=50, db_index=True, verbose_name="Action")
     object_type = models.CharField(max_length=100, db_index=True, verbose_name="Type d'objet")
     object_id = models.CharField(max_length=64, blank=True, verbose_name="ID objet")
-    object_repr = models.CharField(max_length=255, blank=True, verbose_name="RÃ©sumÃ©")
-    metadata = models.JSONField(blank=True, default=dict, verbose_name="DÃ©tails")
+    object_repr = models.CharField(max_length=255, blank=True, verbose_name="Résumé")
+    metadata = models.JSONField(blank=True, default=dict, verbose_name="Détails")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -852,26 +828,21 @@ class AuditLog(models.Model):
 
 
 class SiteSettings(models.Model):
-    """
-    PARAMÃˆTRES GLOBAUX DE LA PLATEFORME (singleton).
-    
-    Une seule ligne dans cette table, modifiable par le super-admin.
-    Contient le nom de la plateforme, le slogan, etc.
-    """
+    """Store the singleton platform-wide site settings."""
     site_name = models.CharField(
         max_length=255,
-        default='Ã‰glise SaaS',
+        default='Église SaaS',
         verbose_name="Nom de la plateforme"
     )
     site_slogan = models.CharField(
         max_length=500,
         blank=True,
-        default='Une plateforme web complÃ¨te pour votre Ã©glise.',
+        default='Une plateforme web complète pour votre église.',
         verbose_name="Slogan"
     )
     site_description = models.TextField(
         blank=True,
-        default='ParamÃ©trez, personnalisez et publiez en quelques clics.',
+        default='Paramétrez, personnalisez et publiez en quelques clics.',
         verbose_name="Description courte"
     )
     site_logo = models.ImageField(
@@ -885,7 +856,7 @@ class SiteSettings(models.Model):
         blank=True,
         null=True,
         verbose_name="Image de couverture",
-        help_text="AffichÃ©e en arriÃ¨re-plan sur la page d'accueil"
+        help_text="Affichée en arrière-plan sur la page d'accueil"
     )
     contact_email = models.EmailField(
         blank=True,
@@ -893,21 +864,21 @@ class SiteSettings(models.Model):
     )
 
     class Meta:
-        verbose_name = "ParamÃ¨tres du site"
-        verbose_name_plural = "ParamÃ¨tres du site"
+        verbose_name = "Paramètres du site"
+        verbose_name_plural = "Paramètres du site"
 
     def __str__(self):
         return self.site_name
 
     def save(self, *args, **kwargs):
-        """Force l'ID Ã  1 pour garantir une seule ligne (singleton)."""
+        """Force the singleton record to use the primary key value 1."""
         self.pk = 1
         super().save(*args, **kwargs)
         cache.delete(SITE_SETTINGS_CACHE_KEY)
 
     @classmethod
     def get(cls):
-        """Retourne l'instance unique, ou en crÃ©e une avec les valeurs par dÃ©faut."""
+        """Return the singleton instance, creating it with defaults when missing."""
         cached = cache.get(SITE_SETTINGS_CACHE_KEY)
         if cached:
             return cached

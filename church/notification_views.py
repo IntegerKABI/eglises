@@ -1,4 +1,4 @@
-"""Vues de notifications, audit et parametres globaux."""
+"""Notification, audit, and platform settings views."""
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -157,7 +157,7 @@ def manage_audit_logs(request):
 @login_required
 @require_capability(CAP_MANAGE_SITE_SETTINGS)
 def site_settings(request):
-    """Paramètres globaux de la plateforme (nom, slogan, etc.)."""
+    """Manage global platform settings."""
     settings_obj = SiteSettings.get()
     church = get_selected_church(request)
 

@@ -1,10 +1,4 @@
-"""Vues du tableau de bord church.
-
-Ce module reste le point d'entree historique des imports et re-exporte
-les vues publiques, les vues de notifications et la vue de connexion.
-Les fonctionnalites sont reparties dans des modules plus petits pour
-simplifier la lecture et la maintenance.
-"""
+"""Dashboard views and the historical public import surface for the church app."""
 
 from datetime import timedelta
 
@@ -105,10 +99,7 @@ from .view_helpers import (
 @login_required
 @require_capability(CAP_VIEW_DASHBOARD)
 def dashboard(request):
-    """
-    Tableau de bord principal.
-    Affiche les statistiques de l'église de l'utilisateur connecté.
-    """
+    """Render the role-aware dashboard overview for the current church."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -190,7 +181,7 @@ def dashboard(request):
 @login_required
 @require_capability(CAP_MANAGE_CHURCH_SETTINGS)
 def church_settings(request):
-    """Paramètres de l'église (nom, logo, couleurs, etc.)."""
+    """Manage church-level branding and profile settings."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -232,7 +223,7 @@ def church_settings(request):
 @login_required
 @require_capability(CAP_MANAGE_EVENTS)
 def manage_events(request):
-    """Liste des événements (dashboard)."""
+    """Render the dashboard event listing with filtering and pagination."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -276,7 +267,7 @@ def manage_events(request):
 @login_required
 @require_capability(CAP_MANAGE_EVENTS)
 def add_event(request):
-    """Ajouter un événement."""
+    """Create a new church event from the dashboard."""
     def _after_save(event, created):
         notify_event_recipients(
             event.church,
@@ -301,7 +292,7 @@ def add_event(request):
 @login_required
 @require_capability(CAP_MANAGE_EVENTS)
 def edit_event(request, pk):
-    """Modifier un événement."""
+    """Update an existing church event from the dashboard."""
     def _after_save(event, created):
         notify_event_recipients(
             event.church,
@@ -329,7 +320,7 @@ def edit_event(request, pk):
 @login_required
 @require_capability(CAP_MANAGE_EVENTS)
 def delete_event(request, pk):
-    """Supprimer un événement."""
+    """Delete a church event from the dashboard."""
     def _after_delete(event):
         notify_event_recipients(
             event.church,

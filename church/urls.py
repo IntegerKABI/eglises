@@ -1,25 +1,11 @@
-"""
-=================================================================
-URLS — Table de routage de l'application church
-=================================================================
-Ce fichier fait le lien entre les URLs et les vues (fonctions).
-Quand un utilisateur tape une URL, Django cherche ici quelle 
-fonction appeler.
-
-STRUCTURE DES URLS :
-- /                          → Page d'accueil globale
-- /eglise/<slug>/            → Page d'accueil d'une église
-- /eglise/<slug>/evenements/ → Événements de cette église
-- /dashboard/                → Tableau de bord admin
-- /dashboard/evenements/     → Gestion des événements
-=================================================================
-"""
+"""URL routing for the church application."""
 
 from django.urls import path
+
 from . import views
 
 urlpatterns = [
-    # === PAGES PUBLIQUES ===
+    # Public routes
     path('', views.home, name='home'),
     path('eglise/<slug:church_slug>/', views.church_home, name='church_home'),
     path('eglise/<slug:church_slug>/evenements/', views.church_events, name='church_events'),
@@ -30,24 +16,24 @@ urlpatterns = [
     path('invitations/', views.pending_invitations, name='pending_invitations'),
     path('invite/<uuid:token>/decline/', views.decline_invite, name='decline_invite'),
 
-    # === DASHBOARD (administration) ===
+    # Dashboard routes
     path('dashboard/', views.dashboard, name='dashboard'),
     path('dashboard/selection/', views.select_church, name='select_church'),
     path('dashboard/parametres/', views.church_settings, name='church_settings'),
 
-    # Événements
+    # Events
     path('dashboard/evenements/', views.manage_events, name='manage_events'),
     path('dashboard/evenements/ajouter/', views.add_event, name='add_event'),
     path('dashboard/evenements/<int:pk>/modifier/', views.edit_event, name='edit_event'),
     path('dashboard/evenements/<int:pk>/supprimer/', views.delete_event, name='delete_event'),
 
-    # Prédications
+    # Sermons
     path('dashboard/predications/', views.manage_sermons, name='manage_sermons'),
     path('dashboard/predications/ajouter/', views.add_sermon, name='add_sermon'),
     path('dashboard/predications/<int:pk>/modifier/', views.edit_sermon, name='edit_sermon'),
     path('dashboard/predications/<int:pk>/supprimer/', views.delete_sermon, name='delete_sermon'),
 
-    # Membres
+    # Members
     path('dashboard/membres/', views.manage_members, name='manage_members'),
     path('dashboard/membres/ajouter/', views.add_member, name='add_member'),
     path('dashboard/membres/<int:pk>/modifier/', views.edit_member, name='edit_member'),
@@ -72,7 +58,7 @@ urlpatterns = [
     # Audit
     path('dashboard/audit/', views.manage_audit_logs, name='manage_audit_logs'),
 
-    # Utilisateurs
+    # Users
     path('dashboard/utilisateurs/', views.manage_users, name='manage_users'),
     path('dashboard/utilisateurs/ajouter/', views.add_user, name='add_user'),
     path('dashboard/utilisateurs/assigner/', views.assign_user, name='assign_user'),
@@ -83,7 +69,7 @@ urlpatterns = [
     path('dashboard/invitations/<int:pk>/revoquer/', views.revoke_invite, name='revoke_invite'),
     path('dashboard/invitations/<int:pk>/renvoyer/', views.resend_invite, name='resend_invite'),
 
-    # Paramètres globaux (super-admin)
+    # Platform administration
     path('dashboard/site/', views.site_settings, name='site_settings'),
     path('dashboard/platform/churches/', views.superadmin_church_list, name='superadmin_church_list'),
     path('dashboard/platform/churches/create/', views.superadmin_church_create, name='superadmin_church_create'),

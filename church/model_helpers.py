@@ -1,4 +1,4 @@
-"""Utilitaires de modeles et constantes de plan church."""
+"""Shared model helpers and plan constants for the church domain."""
 
 import os
 from datetime import timedelta

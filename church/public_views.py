@@ -1,4 +1,4 @@
-"""Vues publiques et parcours d'invitation."""
+"""Public-facing views and invitation flows."""
 
 from django.contrib import messages
 from django.contrib.auth import login, logout
@@ -24,7 +24,7 @@ from .view_helpers import _get_choice_param, _get_public_church, _get_text_param
 
 
 def home(request):
-    """Page d'accueil — liste toutes les églises disponibles."""
+    """Render the public landing page with the list of active churches."""
     churches = Church.objects.filter(status=Church.Status.ACTIVE)
     q = _get_text_param(request, 'q', 100)
     if q:
@@ -43,10 +43,7 @@ def home(request):
 
 
 def church_home(request, church_slug):
-    """
-    Page d'accueil d'une église spécifique.
-    Ex: /eglise/demo/ → affiche l'église avec le slug "demo"
-    """
+    """Render the public homepage for a single church."""
     church = _get_public_church(request, church_slug)
     upcoming_events = filter_public_queryset(church.events).filter(
         event_date__gte=timezone.now().date()
@@ -63,7 +60,7 @@ def church_home(request, church_slug):
 
 
 def church_events(request, church_slug):
-    """Liste de tous les événements d'une église."""
+    """Render the public event listing for a church."""
     church = _get_public_church(request, church_slug)
     events = filter_public_queryset(church.events)
     q = _get_text_param(request, 'q', 100)
@@ -95,7 +92,7 @@ def church_events(request, church_slug):
 
 
 def church_sermons(request, church_slug):
-    """Liste de toutes les prédications d'une église."""
+    """Render the public sermon listing for a church."""
     church = _get_public_church(request, church_slug)
     sermons = filter_public_queryset(church.sermons)
     q = _get_text_param(request, 'q', 100)
@@ -122,7 +119,7 @@ def church_sermons(request, church_slug):
 
 
 def church_page(request, church_slug, page_slug):
-    """Affiche une page dynamique personnalisée."""
+    """Render a custom public page for a church."""
     church = _get_public_church(request, church_slug)
     page = get_object_or_404(filter_public_queryset(Page.objects.filter(church=church, slug=page_slug)))
     return render(request, 'church/custom_page.html', {
@@ -132,7 +129,7 @@ def church_page(request, church_slug, page_slug):
 
 
 def church_contact(request, church_slug):
-    """Formulaire de contact d'une église."""
+    """Handle the public contact form for a church."""
     church = _get_public_church(request, church_slug)
 
     if request.method == 'POST':

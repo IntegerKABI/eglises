@@ -1,29 +1,19 @@
-"""
-=================================================================
-ADMIN — Configuration de l'interface d'administration Django
-=================================================================
-Ce fichier personnalise l'admin Django (/admin/) pour gérer 
-facilement les églises, événements, prédications, etc.
-
-Django génère automatiquement un back-office complet à partir 
-de nos modèles. On le personnalise ici pour le rendre plus 
-pratique (filtres, recherche, colonnes affichées, etc.)
-=================================================================
-"""
+"""Django admin registrations for the church domain."""
 
 from django.contrib import admin
+
 from .models import (
+    AuditLog,
     Church,
     ChurchInvitation,
     ChurchMembership,
-    Event,
-    Sermon,
-    Member,
-    Page,
     ContactMessage,
     ContactMessageReply,
+    Event,
+    Member,
     Notification,
-    AuditLog,
+    Page,
+    Sermon,
     SiteSettings,
 )
 
@@ -78,37 +68,36 @@ class ContactMessageAdmin(admin.ModelAdmin):
 class ContactMessageReplyAdmin(admin.ModelAdmin):
     list_display = ['message', 'created_by', 'created_at']
     list_filter = ['created_by', 'created_at']
-    search_fields = ['body']
 
 
 @admin.register(ChurchMembership)
 class ChurchMembershipAdmin(admin.ModelAdmin):
     list_display = ['user', 'church', 'role', 'is_active', 'created_at']
     list_filter = ['church', 'role', 'is_active']
-    search_fields = ['user__username', 'user__email', 'user__first_name', 'user__last_name']
+    search_fields = ['user__username', 'user__email', 'church__name']
 
 
 @admin.register(ChurchInvitation)
 class ChurchInvitationAdmin(admin.ModelAdmin):
-    list_display = ['email', 'church', 'role', 'status', 'created_at', 'expires_at']
+    list_display = ['email', 'church', 'role', 'status', 'invited_by', 'created_at', 'expires_at']
     list_filter = ['church', 'role', 'status']
-    search_fields = ['email']
-
-
-@admin.register(SiteSettings)
-class SiteSettingsAdmin(admin.ModelAdmin):
-    list_display = ['site_name', 'contact_email']
+    search_fields = ['email', 'church__name', 'invited_by__username']
 
 
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
-    list_display = ['title', 'category', 'church', 'recipient', 'is_read', 'created_at']
-    list_filter = ['category', 'church', 'is_read']
-    search_fields = ['title', 'body']
+    list_display = ['title', 'recipient', 'church', 'category', 'is_read', 'created_at']
+    list_filter = ['church', 'category', 'is_read']
+    search_fields = ['title', 'body', 'recipient__username']
 
 
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):
     list_display = ['action', 'object_type', 'object_id', 'church', 'actor', 'created_at']
     list_filter = ['action', 'object_type', 'church']
-    search_fields = ['object_type', 'object_id', 'object_repr']
+    search_fields = ['object_type', 'object_id', 'object_repr', 'actor__username']
+
+
+@admin.register(SiteSettings)
+class SiteSettingsAdmin(admin.ModelAdmin):
+    list_display = ['site_name', 'contact_email']

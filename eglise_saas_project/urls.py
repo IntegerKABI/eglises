@@ -1,20 +1,11 @@
-﻿"""
-=================================================================
-URLS PRINCIPALES - Point d'entree du routage
-=================================================================
-Ce fichier inclut :
-1. L'admin Django (/admin/)
-2. Les URLs de notre app church
-3. Les URLs d'authentification (login/logout)
-4. La configuration pour servir les fichiers media en developpement
-=================================================================
-"""
+"""Root URL configuration for the Eglise SaaS project."""
 
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
+
 from church.views import TenantLoginView
 
 urlpatterns = [
