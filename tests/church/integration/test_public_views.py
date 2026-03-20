@@ -10,13 +10,13 @@ from tests.factories import SaaSTestCase
 class PublicViewIntegrationTests(SaaSTestCase):
     def test_home_lists_only_active_churches_and_supports_search(self):
         active = self.create_church(name="Source de Vie", city="Kinshasa")
-        self.create_church(name="B?thanie", city="Lubumbashi", status="draft")
+        self.create_church(name="Bethanie", city="Lubumbashi", status="draft")
 
         response = self.client.get(reverse("home"), {"q": "Kinshasa"})
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, active.name)
-        self.assertNotContains(response, "B?thanie")
+        self.assertNotContains(response, "Bethanie")
 
     def test_home_paginates_results(self):
         for index in range(10):
@@ -37,36 +37,36 @@ class PublicViewIntegrationTests(SaaSTestCase):
         )
         self.create_event(
             church,
-            title="Priv?",
+            title="Prive",
             visibility="private",
             event_date=timezone.now().date() + timedelta(days=1),
         )
-        self.create_sermon(church, title="Pr?dication visible", published_at=timezone.now())
-        self.create_sermon(church, title="Pr?dication brouillon", visibility="draft")
-        self.create_page(church, title="? propos", published_at=timezone.now())
+        self.create_sermon(church, title="Predication visible", published_at=timezone.now())
+        self.create_sermon(church, title="Predication brouillon", visibility="draft")
+        self.create_page(church, title="A propos", published_at=timezone.now())
         self.create_page(church, title="Interne", visibility="private")
 
         response = self.client.get(reverse("church_home", args=[church.slug]))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Visible")
-        self.assertContains(response, "Pr?dication visible")
-        self.assertContains(response, "? propos")
-        self.assertNotContains(response, "Priv?")
-        self.assertNotContains(response, "Pr?dication brouillon")
+        self.assertContains(response, "Predication visible")
+        self.assertContains(response, "A propos")
+        self.assertNotContains(response, "Prive")
+        self.assertNotContains(response, "Predication brouillon")
         self.assertNotContains(response, "Interne")
 
     def test_public_event_list_supports_filters_and_invalid_values_are_safe(self):
         church = self.create_church(name="Events Church")
         upcoming = self.create_event(
             church,
-            title="Conf?rence jeunesse",
+            title="Conference jeunesse",
             is_featured=True,
             event_date=timezone.now().date() + timedelta(days=1),
         )
         self.create_event(
             church,
-            title="Ancien ?v?nement",
+            title="Ancien evenement",
             event_date=timezone.now().date() - timedelta(days=1),
             is_featured=False,
         )
@@ -81,12 +81,12 @@ class PublicViewIntegrationTests(SaaSTestCase):
         )
 
         self.assertContains(response, upcoming.title)
-        self.assertNotContains(response, "Ancien ?v?nement")
+        self.assertNotContains(response, "Ancien evenement")
         self.assertEqual(invalid_response.status_code, 200)
 
     def test_public_sermon_list_supports_search_and_featured_filter(self):
         church = self.create_church(name="Sermons Church")
-        visible = self.create_sermon(church, title="Esp?rance", preacher="Pasteur David", is_featured=True)
+        visible = self.create_sermon(church, title="Esperance", preacher="Pasteur David", is_featured=True)
         self.create_sermon(church, title="Foi", preacher="Pasteur Esther", is_featured=False)
 
         response = self.client.get(
@@ -115,7 +115,7 @@ class PublicViewIntegrationTests(SaaSTestCase):
             {
                 "sender_name": "Visiteur",
                 "sender_email": "visiteur@example.com",
-                "subject": "Demande de pri?re",
+                "subject": "Demande de priere",
                 "message": "Merci de prier pour ma famille.",
             },
         )
@@ -124,3 +124,23 @@ class PublicViewIntegrationTests(SaaSTestCase):
         self.assertTrue(ContactMessage.objects.filter(church=church, sender_email="visiteur@example.com").exists())
         self.assertEqual(Notification.objects.filter(church=church, recipient=secretary).count(), 1)
 
+    def test_public_contact_submission_returns_json_for_ajax(self):
+        church = self.create_church(name="Ajax Contact Church")
+        secretary = self.create_user(username="ajax-secretary")
+        self.add_membership(secretary, church, role=ChurchMembership.Role.SECRETARY)
+
+        response = self.client.post(
+            reverse("church_contact", args=[church.slug]),
+            {
+                "sender_name": "Visiteur AJAX",
+                "sender_email": "ajax@example.com",
+                "subject": "Besoin d'information",
+                "message": "Merci de me recontacter.",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["success"], True)
+        self.assertTrue(ContactMessage.objects.filter(church=church, sender_email="ajax@example.com").exists())
+        self.assertEqual(Notification.objects.filter(church=church, recipient=secretary).count(), 1)
