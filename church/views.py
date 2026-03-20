@@ -121,16 +121,16 @@ def dashboard(request):
     )
 
     recent_messages = filter_messages_for_retention(
-        church.messages.filter(status=ContactMessage.Status.NEW),
+        church.messages.filter(status=ContactMessage.Status.NEW).select_related('assigned_to', 'responded_by'),
         church,
     ) if can_manage_messages else church.messages.none()
     assigned_messages = filter_messages_for_retention(
-        church.messages.filter(assigned_to=request.user),
+        church.messages.filter(assigned_to=request.user).select_related('assigned_to', 'responded_by'),
         church,
     ) if can_manage_messages else church.messages.none()
-    recent_sermons = church.sermons.filter(is_active=True).order_by('-created_at')[:5]
-    recent_pages = church.pages.filter(is_active=True).order_by('sort_order', 'title')[:5]
-    recent_members = church.members.filter(is_active=True).order_by('-created_at')[:5]
+    recent_sermons = church.sermons.filter(is_active=True).select_related('created_by').defer('description', 'video_url', 'audio_url').order_by('-created_at')[:5]
+    recent_pages = church.pages.filter(is_active=True).select_related('created_by').defer('content').order_by('sort_order', 'title')[:5]
+    recent_members = church.members.filter(is_active=True).defer('address', 'phone').order_by('-created_at')[:5]
     plan_usage = get_plan_usage(church)
 
     context = {
@@ -230,7 +230,7 @@ def manage_events(request):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
-    events = church.events.all()
+    events = church.events.select_related('created_by').defer('description').all()
     q = _get_text_param(request, 'q', 100)
     if q:
         events = events.filter(
@@ -350,7 +350,7 @@ def manage_sermons(request):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
-    sermons = church.sermons.all()
+    sermons = church.sermons.select_related('created_by').defer('description').all()
     q = _get_text_param(request, 'q', 100)
     if q:
         sermons = sermons.filter(
@@ -429,7 +429,7 @@ def manage_members(request):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
-    members = church.members.all()
+    members = church.members.defer('address').all()
     q = _get_text_param(request, 'q', 100)
     if q:
         members = members.filter(
@@ -511,7 +511,7 @@ def manage_pages(request):
     church = _require_church(request)
     if not church:
         return redirect('select_church')
-    pages = church.pages.all()
+    pages = church.pages.select_related('created_by').defer('content').all()
     q = _get_text_param(request, 'q', 100)
     if q:
         pages = pages.filter(
@@ -593,7 +593,7 @@ def manage_users(request):
         church=church,
         status=ChurchInvitation.Status.PENDING,
         expires_at__gt=timezone.now(),
-    ).order_by('-created_at')
+    ).select_related('invited_by', 'accepted_by').order_by('-created_at')
     q = _get_text_param(request, 'q', 100)
     if q:
         memberships = memberships.filter(

@@ -49,11 +49,11 @@ def home(request):
 def church_home(request, church_slug):
     """Render the public homepage for a single church."""
     church = _get_public_church(request, church_slug)
-    upcoming_events = filter_public_queryset(church.events).filter(
+    upcoming_events = filter_public_queryset(church.events.defer('description')).filter(
         event_date__gte=timezone.now().date()
     )[:3]
-    latest_sermons = filter_public_queryset(church.sermons)[:3]
-    custom_pages = filter_public_queryset(church.pages).filter(is_in_menu=True)
+    latest_sermons = filter_public_queryset(church.sermons.defer('description'))[:3]
+    custom_pages = filter_public_queryset(church.pages.defer('content')).filter(is_in_menu=True)
 
     return render(request, 'church/church_home.html', {
         'church': church,
@@ -66,7 +66,7 @@ def church_home(request, church_slug):
 def church_events(request, church_slug):
     """Render the public event listing for a church."""
     church = _get_public_church(request, church_slug)
-    events = filter_public_queryset(church.events)
+    events = filter_public_queryset(church.events.defer('description'))
     q = _get_text_param(request, 'q', 100)
     if q:
         events = events.filter(
@@ -98,7 +98,7 @@ def church_events(request, church_slug):
 def church_sermons(request, church_slug):
     """Render the public sermon listing for a church."""
     church = _get_public_church(request, church_slug)
-    sermons = filter_public_queryset(church.sermons)
+    sermons = filter_public_queryset(church.sermons.defer('description'))
     q = _get_text_param(request, 'q', 100)
     if q:
         sermons = sermons.filter(
