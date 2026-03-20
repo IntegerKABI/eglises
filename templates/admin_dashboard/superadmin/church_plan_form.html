@@ -1,0 +1,86 @@
+{% extends "admin_dashboard/base_dashboard.html" %}
+{% load crispy_forms_tags %}
+
+{% block dashboard_content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-xl-10">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+            <div>
+                <h1 class="h3 mb-1">Plan et limites</h1>
+                <p class="text-muted mb-0">{{ managed_church.name }} · Ajuster le forfait et les surcharges de limites.</p>
+            </div>
+            <div>
+                <a class="btn btn-outline-secondary" href="{% url 'superadmin_church_detail' managed_church.pk %}">Retour</a>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-12 col-lg-7">
+                <form method="post" class="card shadow-sm border-0">
+                    <div class="card-body p-4">
+                        {% csrf_token %}
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {{ form.non_field_errors }}
+                        </div>
+                        {% endif %}
+                        {{ form.plan|as_crispy_field }}
+                        <div class="row g-3">
+                            <div class="col-md-6">{{ form.max_members_override|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.max_events_override|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.max_sermons_override|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.max_pages_override|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.max_users_override|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.max_pending_invitations_override|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.max_storage_mb_override|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.message_retention_days_override|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.notification_retention_days_override|as_crispy_field }}</div>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-white border-0 px-4 pb-4 d-flex flex-column flex-sm-row gap-2 justify-content-end">
+                        <a class="btn btn-outline-secondary" href="{% url 'superadmin_church_detail' managed_church.pk %}">Annuler</a>
+                        <button type="submit" class="btn btn-primary">Enregistrer le plan</button>
+                    </div>
+                </form>
+            </div>
+            <div class="col-12 col-lg-5">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body">
+                        <h2 class="h5 mb-3">Consommation actuelle</h2>
+                        <div class="list-group list-group-flush">
+                            <div class="list-group-item px-0 d-flex justify-content-between">
+                                <span>Membres</span>
+                                <strong>{{ tenant_usage.members }}</strong>
+                            </div>
+                            <div class="list-group-item px-0 d-flex justify-content-between">
+                                <span>Evenements</span>
+                                <strong>{{ tenant_usage.events }}</strong>
+                            </div>
+                            <div class="list-group-item px-0 d-flex justify-content-between">
+                                <span>Predications</span>
+                                <strong>{{ tenant_usage.sermons }}</strong>
+                            </div>
+                            <div class="list-group-item px-0 d-flex justify-content-between">
+                                <span>Pages</span>
+                                <strong>{{ tenant_usage.pages }}</strong>
+                            </div>
+                            <div class="list-group-item px-0 d-flex justify-content-between">
+                                <span>Utilisateurs</span>
+                                <strong>{{ tenant_usage.users }}</strong>
+                            </div>
+                            <div class="list-group-item px-0 d-flex justify-content-between">
+                                <span>Invitations en attente</span>
+                                <strong>{{ tenant_usage.pending_invitations }}</strong>
+                            </div>
+                            <div class="list-group-item px-0 d-flex justify-content-between">
+                                <span>Stockage</span>
+                                <strong>{{ tenant_usage.storage_mb }} Mo</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

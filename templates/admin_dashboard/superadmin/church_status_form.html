@@ -1,0 +1,36 @@
+{% extends "admin_dashboard/base_dashboard.html" %}
+{% load crispy_forms_tags %}
+
+{% block dashboard_content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-8 col-xl-6">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h3 mb-1">Cycle de vie du tenant</h1>
+                <p class="text-muted mb-0">{{ managed_church.name }} · Controle explicite du statut du tenant.</p>
+            </div>
+            <a class="btn btn-outline-secondary" href="{% url 'superadmin_church_detail' managed_church.pk %}">Retour</a>
+        </div>
+
+        <form method="post" class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                {% csrf_token %}
+                <div class="alert alert-light border">
+                    <div class="fw-semibold mb-1">Rappel des effets</div>
+                    <ul class="mb-0 ps-3">
+                        <li><strong>Brouillon</strong> : tenant non diffuse et reserve a la preparation.</li>
+                        <li><strong>Active</strong> : acces public et tableau de bord disponible.</li>
+                        <li><strong>Suspendue</strong> : acces tenant bloque pour les utilisateurs standards.</li>
+                        <li><strong>Archivee</strong> : tenant historise et non operable.</li>
+                    </ul>
+                </div>
+                {{ form|crispy }}
+            </div>
+            <div class="card-footer bg-white border-0 px-4 pb-4 d-flex flex-column flex-sm-row gap-2 justify-content-end">
+                <a class="btn btn-outline-secondary" href="{% url 'superadmin_church_detail' managed_church.pk %}">Annuler</a>
+                <button type="submit" class="btn btn-primary">Mettre a jour le statut</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

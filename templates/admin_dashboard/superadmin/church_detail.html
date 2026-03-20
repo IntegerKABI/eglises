@@ -1,0 +1,203 @@
+{% extends "admin_dashboard/base_dashboard.html" %}
+
+{% block dashboard_content %}
+<div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+    <div>
+        <h1 class="h3 mb-1">{{ managed_church.name }}</h1>
+        <p class="text-muted mb-0">Pilotage du tenant, administration du plan et actions de support.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-secondary" href="{% url 'superadmin_church_list' %}">Retour a la liste</a>
+        <a class="btn btn-outline-secondary" href="{% url 'superadmin_church_edit' managed_church.pk %}">Modifier le profil</a>
+        <a class="btn btn-outline-secondary" href="{% url 'superadmin_church_plan' managed_church.pk %}">Plan et limites</a>
+        <a class="btn btn-outline-secondary" href="{% url 'superadmin_church_status' managed_church.pk %}">Statut</a>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12 col-xl-8">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-4">
+                    <div>
+                        <div class="text-muted small">Slug</div>
+                        <div class="fw-semibold">{{ managed_church.slug }}</div>
+                    </div>
+                    <div>
+                        <div class="text-muted small">Statut</div>
+                        <span class="badge {% if managed_church.status == 'active' %}text-bg-success{% elif managed_church.status == 'draft' %}text-bg-warning{% elif managed_church.status == 'suspended' %}text-bg-danger{% else %}text-bg-dark{% endif %}">
+                            {{ managed_church.get_status_display }}
+                        </span>
+                    </div>
+                    <div>
+                        <div class="text-muted small">Plan</div>
+                        <span class="badge text-bg-secondary">{{ managed_church.get_plan_display }}</span>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <div class="rounded bg-light p-3 h-100">
+                            <div class="text-muted small">Contact</div>
+                            <div>{{ managed_church.email|default:"-" }}</div>
+                            <div>{{ managed_church.phone|default:"-" }}</div>
+                            <div>{{ managed_church.address|default:"-" }}</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <div class="rounded bg-light p-3 h-100">
+                            <div class="text-muted small">Identite pastorale</div>
+                            <div>{{ managed_church.pastor_name|default:"-" }}</div>
+                            <div>{{ managed_church.city|default:"-" }}{% if managed_church.country %}, {{ managed_church.country }}{% endif %}</div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if managed_church.description %}
+                <hr>
+                <h2 class="h5">Description</h2>
+                <p class="mb-0">{{ managed_church.description }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xl-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Support</h2>
+                <p class="text-muted small">Basculer dans le contexte du tenant pour assister l'equipe locale depuis le tableau de bord.</p>
+                <form method="post" action="{% url 'superadmin_switch_church' managed_church.pk %}" class="d-grid gap-2">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-box-arrow-in-right"></i> Ouvrir le tableau de bord tenant
+                    </button>
+                    <a class="btn btn-outline-secondary" href="{% url 'manage_audit_logs' %}?church={{ managed_church.pk }}">
+                        <i class="bi bi-journal-text"></i> Voir l'audit filtre
+                    </a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12 col-xl-6">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Utilisation actuelle</h2>
+                <div class="row g-3">
+                    <div class="col-6 col-md-4">
+                        <div class="rounded bg-light p-3">
+                            <div class="text-muted small">Membres</div>
+                            <div class="fs-5 fw-semibold">{{ tenant_usage.members }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="rounded bg-light p-3">
+                            <div class="text-muted small">Evenements</div>
+                            <div class="fs-5 fw-semibold">{{ tenant_usage.events }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="rounded bg-light p-3">
+                            <div class="text-muted small">Predications</div>
+                            <div class="fs-5 fw-semibold">{{ tenant_usage.sermons }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="rounded bg-light p-3">
+                            <div class="text-muted small">Pages</div>
+                            <div class="fs-5 fw-semibold">{{ tenant_usage.pages }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="rounded bg-light p-3">
+                            <div class="text-muted small">Utilisateurs</div>
+                            <div class="fs-5 fw-semibold">{{ tenant_usage.users }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="rounded bg-light p-3">
+                            <div class="text-muted small">Stockage</div>
+                            <div class="fs-5 fw-semibold">{{ tenant_usage.storage_mb }} Mo</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-xl-6">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Limites effectives</h2>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <tbody>
+                            {% for row in effective_limits %}
+                            <tr>
+                                <th class="text-muted fw-normal">{{ row.label }}</th>
+                                <td class="text-end fw-semibold">{{ row.display_value }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-12 col-xl-5">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Administrateurs actifs</h2>
+                {% if active_admin_memberships %}
+                <div class="list-group list-group-flush">
+                    {% for membership in active_admin_memberships %}
+                    <div class="list-group-item px-0">
+                        <div class="fw-semibold">{{ membership.user.get_full_name|default:membership.user.username }}</div>
+                        <div class="text-muted small">{{ membership.user.email|default:"Aucun email" }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="alert alert-warning mb-0">Aucun administrateur actif n'est actuellement rattache a cette eglise.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-xl-7">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Audit recent</h2>
+                {% if recent_audit_logs %}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Action</th>
+                                <th>Auteur</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in recent_audit_logs %}
+                            <tr>
+                                <td>{{ entry.created_at|date:"d/m/Y H:i" }}</td>
+                                <td>{{ entry.action }}</td>
+                                <td>{{ entry.actor|default:"Systeme" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-light border mb-0">Aucune entree d'audit recente pour ce tenant.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -85,4 +85,11 @@ urlpatterns = [
 
     # Paramètres globaux (super-admin)
     path('dashboard/site/', views.site_settings, name='site_settings'),
+    path('dashboard/platform/churches/', views.superadmin_church_list, name='superadmin_church_list'),
+    path('dashboard/platform/churches/create/', views.superadmin_church_create, name='superadmin_church_create'),
+    path('dashboard/platform/churches/<int:pk>/', views.superadmin_church_detail, name='superadmin_church_detail'),
+    path('dashboard/platform/churches/<int:pk>/edit/', views.superadmin_church_edit, name='superadmin_church_edit'),
+    path('dashboard/platform/churches/<int:pk>/status/', views.superadmin_church_status, name='superadmin_church_status'),
+    path('dashboard/platform/churches/<int:pk>/plan/', views.superadmin_church_plan, name='superadmin_church_plan'),
+    path('dashboard/platform/churches/<int:pk>/switch/', views.superadmin_switch_church, name='superadmin_switch_church'),
 ]

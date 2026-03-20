@@ -1,0 +1,133 @@
+{% extends "admin_dashboard/base_dashboard.html" %}
+
+{% block dashboard_content %}
+<div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+    <div>
+        <h1 class="h3 mb-1">Gestion des eglises</h1>
+        <p class="text-muted mb-0">Console superadmin pour piloter les tenants, leur cycle de vie et leurs limites.</p>
+    </div>
+    <div>
+        <a class="btn btn-primary" href="{% url 'superadmin_church_create' %}">
+            <i class="bi bi-plus-circle"></i> Nouvelle eglise
+        </a>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-12 col-lg-5">
+                <label class="form-label" for="tenant-search">Recherche</label>
+                <input
+                    class="form-control"
+                    id="tenant-search"
+                    name="q"
+                    type="text"
+                    value="{{ search_query }}"
+                    placeholder="Nom, slug, ville ou email admin"
+                >
+            </div>
+            <div class="col-6 col-lg-3">
+                <label class="form-label" for="tenant-status">Statut</label>
+                <select class="form-select" id="tenant-status" name="status">
+                    <option value="">Tous les statuts</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-6 col-lg-2">
+                <label class="form-label" for="tenant-plan">Plan</label>
+                <select class="form-select" id="tenant-plan" name="plan">
+                    <option value="">Tous les plans</option>
+                    {% for value, label in plan_choices %}
+                    <option value="{{ value }}" {% if selected_plan == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-lg-2 d-grid">
+                <label class="form-label d-none d-lg-block">&nbsp;</label>
+                <button class="btn btn-outline-primary" type="submit">Filtrer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row g-4">
+    {% for card in tenant_cards %}
+    {% with item=card.church usage=card.usage %}
+    <div class="col-12 col-xl-6">
+        <div class="card h-100 shadow-sm border-0">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                    <div>
+                        <h2 class="h5 mb-1">
+                            <a class="text-decoration-none" href="{% url 'superadmin_church_detail' item.pk %}">{{ item.name }}</a>
+                        </h2>
+                        <div class="text-muted small">{{ item.slug }}{% if item.city %} · {{ item.city }}{% endif %}</div>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge text-bg-secondary text-uppercase">{{ item.get_plan_display }}</span>
+                        <span class="badge {% if item.status == 'active' %}text-bg-success{% elif item.status == 'draft' %}text-bg-warning{% elif item.status == 'suspended' %}text-bg-danger{% else %}text-bg-dark{% endif %}">
+                            {{ item.get_status_display }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-6 col-md-3">
+                        <div class="rounded bg-light p-3 h-100">
+                            <div class="text-muted small">Admins actifs</div>
+                            <div class="fs-5 fw-semibold">{{ item.active_admin_count }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="rounded bg-light p-3 h-100">
+                            <div class="text-muted small">Membres</div>
+                            <div class="fs-5 fw-semibold">{{ usage.members }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="rounded bg-light p-3 h-100">
+                            <div class="text-muted small">Evenements</div>
+                            <div class="fs-5 fw-semibold">{{ usage.events }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="rounded bg-light p-3 h-100">
+                            <div class="text-muted small">Stockage</div>
+                            <div class="fs-5 fw-semibold">{{ usage.storage_mb }} Mo</div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if item.active_admin_memberships %}
+                <div class="mb-3">
+                    <div class="small text-muted mb-1">Administrateurs actifs</div>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for membership in item.active_admin_memberships %}
+                        <span class="badge rounded-pill text-bg-light border">{{ membership.user.get_full_name|default:membership.user.username }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="d-flex flex-wrap gap-2">
+                    <a class="btn btn-sm btn-primary" href="{% url 'superadmin_church_detail' item.pk %}">Ouvrir</a>
+                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'superadmin_church_edit' item.pk %}">Profil</a>
+                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'superadmin_church_plan' item.pk %}">Plan</a>
+                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'superadmin_church_status' item.pk %}">Statut</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endwith %}
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-info mb-0">Aucune eglise ne correspond aux filtres.</div>
+    </div>
+    {% endfor %}
+</div>
+
+{% include "partials/pagination.html" with page_obj=page_obj querystring=querystring %}
+{% endblock %}

@@ -28,6 +28,10 @@ class RoleAccessApplicationTests(SaaSTestCase):
         "manage_messages",
         "manage_members",
     ]
+    superadmin_only_routes = [
+        "site_settings",
+        "superadmin_church_list",
+    ]
 
     def setUp(self):
         super().setUp()
@@ -68,8 +72,14 @@ class RoleAccessApplicationTests(SaaSTestCase):
         response = self.client.get(reverse("site_settings"))
         self.assertEqual(response.status_code, 200)
 
+    def test_superadmin_routes_are_denied_to_tenant_roles(self):
+        for user in (self.admin, self.staff, self.secretary):
+            self.login_to_church(user, self.church)
+            for route_name in self.superadmin_only_routes:
+                response = self.client.get(reverse(route_name))
+                self.assertRedirects(response, reverse("dashboard"), fetch_redirect_response=False)
+
     def test_tenant_isolation_blocks_editing_objects_from_another_church(self):
         self.login_to_church(self.admin, self.church)
         response = self.client.get(reverse("edit_event", args=[self.event.pk]))
         self.assertEqual(response.status_code, 404)
-

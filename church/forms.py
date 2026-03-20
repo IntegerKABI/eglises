@@ -33,6 +33,19 @@ from .limits import enforce_limits_for_model
 from .membership_policy import validate_single_church_membership
 
 
+PLAN_OVERRIDE_FIELDS = [
+    'max_members_override',
+    'max_events_override',
+    'max_sermons_override',
+    'max_pages_override',
+    'max_users_override',
+    'max_pending_invitations_override',
+    'max_storage_mb_override',
+    'message_retention_days_override',
+    'notification_retention_days_override',
+]
+
+
 class ChurchForm(forms.ModelForm):
     """Formulaire de configuration d'une église."""
     class Meta:
@@ -137,6 +150,274 @@ class SiteSettingsForm(forms.ModelForm):
         widgets = {
             'site_description': forms.Textarea(attrs={'rows': 3}),
         }
+
+
+class SuperAdminChurchUpdateForm(forms.ModelForm):
+    """Met a jour le profil d'un tenant sans toucher a son plan ni a son statut."""
+
+    class Meta:
+        model = Church
+        fields = [
+            'name', 'description', 'logo', 'cover_image',
+            'address', 'city', 'country', 'phone', 'email',
+            'facebook', 'youtube', 'instagram',
+            'primary_color', 'secondary_color',
+            'welcome_message', 'service_times', 'pastor_name',
+        ]
+        widgets = {
+            'description': forms.Textarea(attrs={'rows': 3}),
+            'welcome_message': forms.Textarea(attrs={'rows': 3}),
+            'service_times': forms.Textarea(attrs={'rows': 3}),
+            'primary_color': forms.TextInput(attrs={'type': 'color'}),
+            'secondary_color': forms.TextInput(attrs={'type': 'color'}),
+        }
+
+
+class SuperAdminChurchPlanForm(forms.ModelForm):
+    """Met a jour le plan SaaS et les limites surchargees d'un tenant."""
+
+    class Meta:
+        model = Church
+        fields = ['plan', *PLAN_OVERRIDE_FIELDS]
+        widgets = {
+            field_name: forms.NumberInput(attrs={'min': 0})
+            for field_name in PLAN_OVERRIDE_FIELDS
+        }
+
+
+class SuperAdminChurchStatusForm(forms.ModelForm):
+    """Valide les transitions de statut d'un tenant."""
+
+    class Meta:
+        model = Church
+        fields = ['status']
+
+    def clean_status(self):
+        status = self.cleaned_data['status']
+        if (
+            status == Church.Status.ACTIVE
+            and self.instance.pk
+            and not ChurchMembership.objects.filter(
+                church=self.instance,
+                role=ChurchMembership.Role.ADMIN,
+                is_active=True,
+            ).exists()
+        ):
+            raise ValidationError(
+                "Une eglise active doit avoir au moins un administrateur actif."
+            )
+        return status
+
+
+class SuperAdminChurchCreateForm(forms.ModelForm):
+    """Cree un tenant et son premier administrateur dans une transaction."""
+
+    admin_assignment_mode = forms.ChoiceField(
+        label="Mode d'attribution de l'administrateur",
+        choices=[
+            ('existing', "Associer un utilisateur existant"),
+            ('new', "Creer un nouvel utilisateur"),
+        ],
+        initial='existing',
+    )
+    existing_admin_identifier = forms.CharField(
+        label="Utilisateur existant (email ou nom d'utilisateur)",
+        required=False,
+        max_length=150,
+    )
+    new_admin_username = forms.CharField(
+        label="Nom d'utilisateur du nouvel administrateur",
+        required=False,
+        max_length=150,
+    )
+    new_admin_email = forms.EmailField(
+        label="Email du nouvel administrateur",
+        required=False,
+    )
+    new_admin_first_name = forms.CharField(
+        label="Prenom du nouvel administrateur",
+        required=False,
+        max_length=150,
+    )
+    new_admin_last_name = forms.CharField(
+        label="Nom du nouvel administrateur",
+        required=False,
+        max_length=150,
+    )
+    new_admin_password1 = forms.CharField(
+        label="Mot de passe",
+        required=False,
+        widget=forms.PasswordInput,
+    )
+    new_admin_password2 = forms.CharField(
+        label="Confirmer le mot de passe",
+        required=False,
+        widget=forms.PasswordInput,
+    )
+
+    class Meta:
+        model = Church
+        fields = [
+            'name', 'description', 'logo', 'cover_image',
+            'address', 'city', 'country', 'phone', 'email',
+            'facebook', 'youtube', 'instagram',
+            'primary_color', 'secondary_color',
+            'welcome_message', 'service_times', 'pastor_name',
+            'status', 'plan', *PLAN_OVERRIDE_FIELDS,
+        ]
+        widgets = {
+            'description': forms.Textarea(attrs={'rows': 3}),
+            'welcome_message': forms.Textarea(attrs={'rows': 3}),
+            'service_times': forms.Textarea(attrs={'rows': 3}),
+            'primary_color': forms.TextInput(attrs={'type': 'color'}),
+            'secondary_color': forms.TextInput(attrs={'type': 'color'}),
+            **{
+                field_name: forms.NumberInput(attrs={'min': 0})
+                for field_name in PLAN_OVERRIDE_FIELDS
+            },
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.admin_user = None
+        self.create_new_admin = False
+        super().__init__(*args, **kwargs)
+        self.fields['status'].initial = Church.Status.DRAFT
+        for field_name in ('country', 'primary_color', 'secondary_color'):
+            self.fields[field_name].required = False
+            self.fields[field_name].initial = self._meta.model._meta.get_field(field_name).default
+
+    def clean(self):
+        cleaned_data = super().clean()
+        for field_name in ('country', 'primary_color', 'secondary_color'):
+            if not cleaned_data.get(field_name):
+                cleaned_data[field_name] = self._meta.model._meta.get_field(field_name).default
+        mode = cleaned_data.get('admin_assignment_mode')
+        if mode == 'existing':
+            self._clean_existing_admin(cleaned_data)
+        elif mode == 'new':
+            self._clean_new_admin(cleaned_data)
+        else:
+            self.add_error('admin_assignment_mode', "Mode d'attribution invalide.")
+
+        if (
+            cleaned_data.get('status') == Church.Status.ACTIVE
+            and self.admin_user is None
+        ):
+            raise ValidationError(
+                "Une eglise active doit etre creee avec un administrateur actif."
+            )
+        return cleaned_data
+
+    def _clean_existing_admin(self, cleaned_data):
+        identifier = (cleaned_data.get('existing_admin_identifier') or '').strip()
+        if not identifier:
+            self.add_error(
+                'existing_admin_identifier',
+                "Renseignez l'identifiant de l'utilisateur existant.",
+            )
+            return
+
+        User = get_user_model()
+        user = User.objects.filter(username=identifier).first()
+        if user is None:
+            user = User.objects.filter(email__iexact=identifier).first()
+        if user is None:
+            self.add_error(
+                'existing_admin_identifier',
+                "Aucun utilisateur n'a ete trouve avec cet identifiant.",
+            )
+            return
+        if user.is_superuser:
+            self.add_error(
+                'existing_admin_identifier',
+                "Un superadministrateur ne peut pas etre assigne comme admin de tenant.",
+            )
+            return
+        if not user.is_active:
+            self.add_error(
+                'existing_admin_identifier',
+                "L'utilisateur selectionne doit etre actif.",
+            )
+            return
+        try:
+            validate_single_church_membership(user)
+        except ValidationError as exc:
+            self.add_error('existing_admin_identifier', exc.messages[0])
+            return
+
+        self.admin_user = user
+        self.create_new_admin = False
+
+    def _clean_new_admin(self, cleaned_data):
+        required_fields = {
+            'new_admin_username': "Le nom d'utilisateur est obligatoire.",
+            'new_admin_email': "L'email est obligatoire.",
+            'new_admin_password1': "Le mot de passe est obligatoire.",
+            'new_admin_password2': "La confirmation du mot de passe est obligatoire.",
+        }
+        for field_name, message in required_fields.items():
+            if not cleaned_data.get(field_name):
+                self.add_error(field_name, message)
+
+        if any(field in self.errors for field in required_fields):
+            return
+
+        password1 = cleaned_data.get('new_admin_password1')
+        password2 = cleaned_data.get('new_admin_password2')
+        if password1 != password2:
+            self.add_error('new_admin_password2', "Les mots de passe ne correspondent pas.")
+            return
+
+        User = get_user_model()
+        username = cleaned_data['new_admin_username']
+        email = cleaned_data['new_admin_email'].strip().lower()
+        if User.objects.filter(username=username).exists():
+            self.add_error('new_admin_username', "Ce nom d'utilisateur est deja utilise.")
+        if User.objects.filter(email__iexact=email).exists():
+            self.add_error('new_admin_email', "Un compte existe deja avec cet email.")
+        if any(field in self.errors for field in ('new_admin_username', 'new_admin_email')):
+            return
+
+        provisional_user = User(
+            username=username,
+            email=email,
+            first_name=cleaned_data.get('new_admin_first_name', ''),
+            last_name=cleaned_data.get('new_admin_last_name', ''),
+            is_active=True,
+        )
+        try:
+            validate_password(password1, provisional_user)
+        except ValidationError as exc:
+            self.add_error('new_admin_password1', exc)
+            return
+
+        self.admin_user = provisional_user
+        self.create_new_admin = True
+
+    def save(self, commit=True):
+        if not commit:
+            raise ValueError("SuperAdminChurchCreateForm.save requires commit=True.")
+        if self.admin_user is None:
+            raise ValueError("Le formulaire doit etre valide avant l'enregistrement.")
+
+        with transaction.atomic():
+            church = super().save(commit=True)
+            enforce_limits_for_model(church, ChurchMembership)
+            admin_user = self.admin_user
+            if self.create_new_admin:
+                admin_user.set_password(self.cleaned_data['new_admin_password1'])
+                admin_user.is_active = True
+                admin_user.save()
+            membership = ChurchMembership.objects.create(
+                user=admin_user,
+                church=church,
+                role=ChurchMembership.Role.ADMIN,
+                is_active=True,
+            )
+
+        self.created_admin_user = admin_user
+        self.created_membership = membership
+        return church
 
 
 class ContactMessageReplyForm(forms.ModelForm):
@@ -376,3 +657,6 @@ class InviteSignupForm(forms.ModelForm):
         if commit:
             user.save()
         return user
+
+
+
