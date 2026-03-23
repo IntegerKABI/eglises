@@ -260,8 +260,7 @@ def superadmin_church_create(request):
                         'redirect': reverse('superadmin_church_detail', args=[church.pk]),
                     }
                 )
-            if not email_error or invitation is None:
-                messages.success(request, success_message)
+            messages.success(request, success_message)
             return redirect('superadmin_church_detail', pk=church.pk)
         if is_ajax(request):
             return JsonResponse({'success': False, 'errors': form.errors}, status=400)

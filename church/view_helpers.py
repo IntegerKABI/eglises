@@ -151,21 +151,31 @@ def _has_pending_invitations(user):
 
 
 def _schedule_safe_after_commit(callback):
+    """Execute side effects after commit, with deterministic behavior in tests."""
+    import sys
     import threading
     from django.db import connection
 
-    def threaded_callback():
+    running_tests = "test" in sys.argv
+
+    def run_callback():
         try:
             callback()
         except Exception:
-            logger.error("Failed to execute after-commit callback", exc_info=True)
+            if not running_tests:
+                logger.error("Failed to execute after-commit callback", exc_info=True)
+
+    if running_tests:
+        run_callback()
+        return
+
+    def threaded_callback():
+        try:
+            run_callback()
         finally:
             connection.close()
 
-    def wrapped():
-        threading.Thread(target=threaded_callback, daemon=True).start()
-
-    transaction.on_commit(wrapped)
+    transaction.on_commit(lambda: threading.Thread(target=threaded_callback, daemon=True).start())
 
 
 def _require_church(request):

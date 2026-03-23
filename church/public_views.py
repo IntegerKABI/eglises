@@ -16,7 +16,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.cache import cache_page
+from .cache import cache_public_view, get_church_cache_version
 
 from .audit import log_audit
 from .forms import ContactForm, InviteSignupForm
@@ -28,7 +28,10 @@ from .tenancy import get_accessible_churches
 from .view_helpers import _get_choice_param, _get_public_church, _get_text_param, _has_pending_invitations, _mark_invite_notifications_read, _parse_bool_param, _querystring_without_page, is_ajax
 
 
-@cache_page(60 * 15)
+def _home_key(request):
+    return f"global_home_v{get_church_cache_version(None)}"
+
+@cache_public_view(_home_key)
 def home(request):
     """Render the public landing page with the list of active churches."""
     churches = Church.objects.filter(status=Church.Status.ACTIVE)
@@ -48,7 +51,10 @@ def home(request):
     })
 
 
-@cache_page(60 * 15)
+def _church_home_key(request, church_slug):
+    return f"c_{church_slug}_home_v{get_church_cache_version(church_slug)}"
+
+@cache_public_view(_church_home_key)
 def church_home(request, church_slug):
     """Render the public homepage for a single church."""
     church = _get_public_church(request, church_slug)
@@ -66,7 +72,10 @@ def church_home(request, church_slug):
     })
 
 
-@cache_page(60 * 15)
+def _church_events_key(request, church_slug):
+    return f"c_{church_slug}_evt_v{get_church_cache_version(church_slug)}"
+
+@cache_public_view(_church_events_key)
 def church_events(request, church_slug):
     """Render the public event listing for a church."""
     church = _get_public_church(request, church_slug)
@@ -99,7 +108,10 @@ def church_events(request, church_slug):
     })
 
 
-@cache_page(60 * 15)
+def _church_sermons_key(request, church_slug):
+    return f"c_{church_slug}_srm_v{get_church_cache_version(church_slug)}"
+
+@cache_public_view(_church_sermons_key)
 def church_sermons(request, church_slug):
     """Render the public sermon listing for a church."""
     church = _get_public_church(request, church_slug)
@@ -127,7 +139,10 @@ def church_sermons(request, church_slug):
     })
 
 
-@cache_page(60 * 15)
+def _church_page_key(request, church_slug, page_slug):
+    return f"c_{church_slug}_pg_{page_slug}_v{get_church_cache_version(church_slug)}"
+
+@cache_public_view(_church_page_key)
 def church_page(request, church_slug, page_slug):
     """Render a custom public page for a church."""
     church = _get_public_church(request, church_slug)
