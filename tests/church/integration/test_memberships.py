@@ -33,6 +33,26 @@ class MembershipIntegrationTests(SaaSTestCase):
         self.assertRedirects(response, reverse("manage_users"))
         self.assertTrue(ChurchMembership.objects.filter(church=self.church, user__username="new-member").exists())
 
+    def test_add_user_rejects_weak_passwords(self):
+        response = self.client.post(
+            reverse("add_user"),
+            {
+                "username": "weak-member",
+                "email": "weak-member@example.com",
+                "first_name": "Weak",
+                "last_name": "Member",
+                "phone": "+243810000021",
+                "is_active": True,
+                "role": ChurchMembership.Role.STAFF,
+                "password1": "12345",
+                "password2": "12345",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(ChurchMembership.objects.filter(church=self.church, user__username="weak-member").exists())
+        self.assertContains(response, "mot de passe", status_code=200)
+
     def test_assign_user_creates_membership_for_existing_user(self):
         response = self.client.post(
             reverse("assign_user"),

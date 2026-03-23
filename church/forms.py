@@ -439,6 +439,16 @@ class ChurchUserCreateForm(forms.ModelForm):
         password2 = cleaned_data.get('password2')
         if password1 and password2 and password1 != password2:
             raise ValidationError("Les mots de passe ne correspondent pas.")
+        if password1:
+            provisional_user = self.instance or get_user_model()()
+            provisional_user.username = cleaned_data.get('username')
+            provisional_user.email = cleaned_data.get('email')
+            provisional_user.first_name = cleaned_data.get('first_name')
+            provisional_user.last_name = cleaned_data.get('last_name')
+            try:
+                validate_password(password1, provisional_user)
+            except ValidationError as exc:
+                self.add_error('password1', exc)
         return cleaned_data
 
     def save(self, church, commit=True):

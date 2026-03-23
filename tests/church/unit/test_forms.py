@@ -44,6 +44,21 @@ class ChurchFormTests(SaaSTestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("mots de passe", str(form.errors).lower())
 
+    def test_church_user_create_form_rejects_weak_passwords(self):
+        form = ChurchUserCreateForm(
+            data={
+                "username": "weak-password-user",
+                "email": "weak-password-user@example.com",
+                "role": ChurchMembership.Role.STAFF,
+                "password1": "12345",
+                "password2": "12345",
+                "is_active": True,
+            }
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("password1", form.errors)
+
     def test_church_user_create_form_rolls_back_user_when_membership_creation_fails(self):
         church = self.create_church()
         form = ChurchUserCreateForm(
