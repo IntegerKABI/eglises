@@ -4,9 +4,16 @@ import os
 import sys
 
 
+def _default_settings_module(argv):
+    """Return the default settings module for the current management command."""
+    if len(argv) > 1 and argv[1] == "test":
+        return "eglise_saas_project.settings.test"
+    return "eglise_saas_project.settings.development"
+
+
 def main():
     """Run administrative tasks."""
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'eglise_saas_project.settings')
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', _default_settings_module(sys.argv))
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

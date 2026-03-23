@@ -1,9 +1,10 @@
 import os
+from importlib import import_module
 from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
-from eglise_saas_project import settings as project_settings
+from eglise_saas_project.settings import base as project_settings
 
 
 class SettingsHelpersTests(SimpleTestCase):
@@ -68,3 +69,8 @@ class SettingsHelpersTests(SimpleTestCase):
 
         self.assertEqual(config["ENGINE"], "django.db.backends.sqlite3")
         self.assertTrue(str(config["NAME"]).endswith("db.sqlite3"))
+
+    def test_settings_profiles_are_importable(self):
+        self.assertIsNotNone(import_module("eglise_saas_project.settings.development"))
+        self.assertIsNotNone(import_module("eglise_saas_project.settings.production"))
+        self.assertIsNotNone(import_module("eglise_saas_project.settings.test"))

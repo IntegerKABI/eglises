@@ -20,6 +20,8 @@ services:
         generateValue: true
       - key: DEBUG
         value: "False"
+      - key: DJANGO_SETTINGS_MODULE
+        value: "eglise_saas_project.settings.production"
       - key: ALLOWED_HOSTS
         value: ".onrender.com"
       - key: PYTHON_VERSION
@@ -39,6 +41,8 @@ services:
         generateValue: true
       - key: DEBUG
         value: "False"
+      - key: DJANGO_SETTINGS_MODULE
+        value: "eglise_saas_project.settings.production"
       - key: ALLOWED_HOSTS
         value: ".onrender.com"
       - key: PYTHON_VERSION
