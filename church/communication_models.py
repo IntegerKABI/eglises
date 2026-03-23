@@ -1,4 +1,4 @@
-"""Communication, notification, and audit models for the church application."""
+"""Communication, notification, audit, and background job models."""
 
 from django.conf import settings
 from django.db import models
@@ -192,3 +192,52 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.action} - {self.object_type} ({self.object_id})"
+
+
+class BackgroundJob(models.Model):
+    """Persist background jobs that must survive request and process boundaries."""
+
+    class JobType(models.TextChoices):
+        SEND_INVITE_EMAIL = "send_invite_email", "Envoi email invitation"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "En attente"
+        RUNNING = "running", "En cours"
+        COMPLETED = "completed", "Terminee"
+        FAILED = "failed", "Echouee"
+
+    job_type = models.CharField(
+        max_length=50,
+        choices=JobType.choices,
+        db_index=True,
+        verbose_name="Type de tache",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+        verbose_name="Statut",
+    )
+    payload = models.JSONField(default=dict, verbose_name="Charge utile")
+    attempts = models.PositiveIntegerField(default=0, verbose_name="Nombre d'essais")
+    max_attempts = models.PositiveIntegerField(default=3, verbose_name="Essais maximum")
+    available_at = models.DateTimeField(default=timezone.now, db_index=True, verbose_name="Disponible le")
+    locked_at = models.DateTimeField(null=True, blank=True, verbose_name="Verrouille le")
+    started_at = models.DateTimeField(null=True, blank=True, verbose_name="Demarre le")
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name="Termine le")
+    last_error = models.TextField(blank=True, verbose_name="Derniere erreur")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Tache d'arriere-plan"
+        verbose_name_plural = "Taches d'arriere-plan"
+        ordering = ["available_at", "id"]
+        indexes = [
+            models.Index(fields=["status", "available_at"], name="bg_job_status_avail_idx"),
+            models.Index(fields=["job_type", "status"], name="bg_job_type_status_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.job_type} ({self.status})"

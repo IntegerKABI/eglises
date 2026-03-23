@@ -1,16 +1,19 @@
+from io import StringIO
 from unittest.mock import patch
 
 from django.core import mail
+from django.core.management import call_command
 from django.test import override_settings
 from django.urls import reverse
 
-from church.models import AuditLog, Church, ChurchInvitation, ChurchMembership
+from church.models import AuditLog, BackgroundJob, Church, ChurchInvitation, ChurchMembership
 from tests.factories import SaaSTestCase
 
 
 @override_settings(
     EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
     DEFAULT_FROM_EMAIL="tests@example.com",
+    BACKGROUND_JOBS_EAGER=False,
 )
 class SuperAdminChurchManagementIntegrationTests(SaaSTestCase):
     def setUp(self):
@@ -43,11 +46,10 @@ class SuperAdminChurchManagementIntegrationTests(SaaSTestCase):
             email="candidate-admin@example.com",
         )
 
-        with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(
-                reverse("superadmin_church_create"),
-                self._church_create_payload(existing_admin_identifier=candidate.email),
-            )
+        response = self.client.post(
+            reverse("superadmin_church_create"),
+            self._church_create_payload(existing_admin_identifier=candidate.email),
+        )
 
         church = Church.objects.get(name="Grace Kin")
         invitation = ChurchInvitation.objects.get(church=church, email=candidate.email)
@@ -56,6 +58,8 @@ class SuperAdminChurchManagementIntegrationTests(SaaSTestCase):
         self.assertFalse(
             ChurchMembership.objects.filter(user=candidate, church=church).exists()
         )
+        self.assertEqual(BackgroundJob.objects.count(), 1)
+        call_command("process_background_jobs", stdout=StringIO())
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn(str(invitation.token), mail.outbox[0].body)
         self.assertTrue(AuditLog.objects.filter(church=church, action="tenant_create").exists())

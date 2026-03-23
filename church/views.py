@@ -91,10 +91,10 @@ from .view_helpers import (
     _mark_invite_notifications_read,
     _handle_church_delete,
     _handle_church_form,
+    _enqueue_invite_email_delivery,
     _querystring_without_page,
     _require_church,
     _schedule_safe_after_commit,
-    _send_invite_email,
     is_ajax,
 )
 
@@ -745,38 +745,38 @@ def invite_user(request):
     if request.method == 'POST':
         form = ChurchInvitationForm(request.POST, church=church, invited_by=request.user)
         if form.is_valid():
-            invite = form.save()
-            try:
-                log_audit(
-                    actor=request.user,
-                    church=church,
-                    action="invite_create",
-                    instance=invite,
-                    metadata={"email": invite.email, "role": invite.role},
-                )
-            except Exception:
-                logger.error("Failed to log invite_create action", exc_info=True)
-            notify_church_admins(
-                church,
-                category="invite",
-                title="Invitation envoy?e",
-                body=f"{invite.email} - {invite.get_role_display()}",
-                link=reverse('manage_users'),
-                exclude=request.user,
-            )
-            User = get_user_model()
-            invited_user = User.objects.filter(email__iexact=invite.email).first()
-            if invited_user:
-                notify_user(
-                    invited_user,
+            with transaction.atomic():
+                invite = form.save()
+                try:
+                    log_audit(
+                        actor=request.user,
+                        church=church,
+                        action="invite_create",
+                        instance=invite,
+                        metadata={"email": invite.email, "role": invite.role},
+                    )
+                except Exception:
+                    logger.error("Failed to log invite_create action", exc_info=True)
+                notify_church_admins(
                     church,
                     category="invite",
-                    title="Invitation ? rejoindre l'?glise",
-                    body=f"Invitation pour {church.name} ({invite.get_role_display()}).",
-                    link=reverse('accept_invite', args=[invite.token]),
+                    title="Invitation envoy?e",
+                    body=f"{invite.email} - {invite.get_role_display()}",
+                    link=reverse('manage_users'),
+                    exclude=request.user,
                 )
-            invite_url = request.build_absolute_uri(reverse('accept_invite', args=[invite.token]))
-            _schedule_safe_after_commit(lambda: _send_invite_email(invite_url, invite))
+                User = get_user_model()
+                invited_user = User.objects.filter(email__iexact=invite.email).first()
+                if invited_user:
+                    notify_user(
+                        invited_user,
+                        church,
+                        category="invite",
+                        title="Invitation ? rejoindre l'?glise",
+                        body=f"Invitation pour {church.name} ({invite.get_role_display()}).",
+                        link=reverse('accept_invite', args=[invite.token]),
+                    )
+                _enqueue_invite_email_delivery(request, invite)
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': "Invitation envoy?e.", 'redirect': reverse('manage_users')})
             messages.success(request, "Invitation envoy?e.")
@@ -836,28 +836,28 @@ def resend_invite(request, pk):
         return redirect('select_church')
     invite = get_object_or_404(ChurchInvitation, pk=pk, church=church)
     if request.method == 'POST' and invite.status == ChurchInvitation.Status.PENDING:
-        invite.expires_at = timezone.now() + timedelta(days=7)
-        invite.save(update_fields=['expires_at'])
-        try:
-            log_audit(
-                actor=request.user,
-                church=church,
-                action="invite_resend",
-                instance=invite,
-                metadata={"email": invite.email},
+        with transaction.atomic():
+            invite.expires_at = timezone.now() + timedelta(days=7)
+            invite.save(update_fields=['expires_at'])
+            try:
+                log_audit(
+                    actor=request.user,
+                    church=church,
+                    action="invite_resend",
+                    instance=invite,
+                    metadata={"email": invite.email},
+                )
+            except Exception:
+                logger.error("Failed to log invite_resend action", exc_info=True)
+            _enqueue_invite_email_delivery(request, invite)
+            notify_church_admins(
+                church,
+                category="invite",
+                title="Invitation renvoy?e",
+                body=f"{invite.email} - {invite.get_role_display()}",
+                link=reverse('manage_users'),
+                exclude=request.user,
             )
-        except Exception:
-            logger.error("Failed to log invite_resend action", exc_info=True)
-        invite_url = request.build_absolute_uri(reverse('accept_invite', args=[invite.token]))
-        _schedule_safe_after_commit(lambda: _send_invite_email(invite_url, invite))
-        notify_church_admins(
-            church,
-            category="invite",
-            title="Invitation renvoy?e",
-            body=f"{invite.email} - {invite.get_role_display()}",
-            link=reverse('manage_users'),
-            exclude=request.user,
-        )
         messages.success(request, "Invitation renvoy?e.")
     return redirect('manage_users')
 

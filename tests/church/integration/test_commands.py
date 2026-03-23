@@ -1,11 +1,13 @@
 from datetime import timedelta
 from io import StringIO
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
+from django.test import override_settings
 from django.utils import timezone
 
-from church.models import Church, ChurchMembership, ContactMessage, Event, Member, Notification, Page, Sermon
+from church.models import BackgroundJob, Church, ChurchInvitation, ChurchMembership, ContactMessage, Event, Member, Notification, Page, Sermon
 from tests.factories import SaaSTestCase
 
 
@@ -82,3 +84,60 @@ class ManagementCommandIntegrationTests(SaaSTestCase):
         self.assertTrue(ContactMessage.objects.filter(pk=old_read.pk).exists())
         self.assertTrue(ContactMessage.objects.filter(pk=recent_archived.pk).exists())
         self.assertIn("Retention Church", stdout.getvalue())
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        DEFAULT_FROM_EMAIL="tests@example.com",
+        BACKGROUND_JOBS_EAGER=False,
+    )
+    def test_process_background_jobs_delivers_pending_invite_emails(self):
+        admin = self.create_user(username="job-admin", email="job-admin@example.com")
+        recipient = self.create_user(username="job-user", email="job-user@example.com")
+        church = self.create_church(name="Job Church")
+        self.add_membership(admin, church, role=ChurchMembership.Role.ADMIN)
+        invitation = self.create_invitation(
+            church,
+            recipient.email,
+            invited_by=admin,
+        )
+        BackgroundJob.objects.create(
+            job_type=BackgroundJob.JobType.SEND_INVITE_EMAIL,
+            payload={
+                "invitation_id": invitation.pk,
+                "invite_url": f"http://testserver/invitations/{invitation.token}/",
+            },
+        )
+
+        stdout = StringIO()
+        call_command("process_background_jobs", stdout=stdout)
+
+        job = BackgroundJob.objects.get()
+        self.assertEqual(job.status, BackgroundJob.Status.COMPLETED)
+        self.assertIn("Processed 1 background job", stdout.getvalue())
+
+    @override_settings(BACKGROUND_JOBS_EAGER=False)
+    def test_process_background_jobs_marks_failed_delivery_for_retry(self):
+        admin = self.create_user(username="retry-admin", email="retry-admin@example.com")
+        recipient = self.create_user(username="retry-user", email="retry-user@example.com")
+        church = self.create_church(name="Retry Church")
+        self.add_membership(admin, church, role=ChurchMembership.Role.ADMIN)
+        invitation = self.create_invitation(
+            church,
+            recipient.email,
+            invited_by=admin,
+        )
+        job = BackgroundJob.objects.create(
+            job_type=BackgroundJob.JobType.SEND_INVITE_EMAIL,
+            payload={
+                "invitation_id": invitation.pk,
+                "invite_url": f"http://testserver/invitations/{invitation.token}/",
+            },
+        )
+
+        with patch("church.background_jobs.send_mail", side_effect=RuntimeError("smtp down")):
+            call_command("process_background_jobs", stdout=StringIO())
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, BackgroundJob.Status.PENDING)
+        self.assertEqual(job.attempts, 1)
+        self.assertIn("smtp down", job.last_error)

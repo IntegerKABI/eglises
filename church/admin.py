@@ -4,6 +4,7 @@ from django.contrib import admin
 
 from .models import (
     AuditLog,
+    BackgroundJob,
     Church,
     ChurchInvitation,
     ChurchMembership,
@@ -96,6 +97,13 @@ class AuditLogAdmin(admin.ModelAdmin):
     list_display = ['action', 'object_type', 'object_id', 'church', 'actor', 'created_at']
     list_filter = ['action', 'object_type', 'church']
     search_fields = ['object_type', 'object_id', 'object_repr', 'actor__username']
+
+
+@admin.register(BackgroundJob)
+class BackgroundJobAdmin(admin.ModelAdmin):
+    list_display = ['job_type', 'status', 'attempts', 'available_at', 'created_at', 'completed_at']
+    list_filter = ['job_type', 'status']
+    search_fields = ['job_type', 'last_error']
 
 
 @admin.register(SiteSettings)

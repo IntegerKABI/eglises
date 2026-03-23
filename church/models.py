@@ -1,6 +1,6 @@
 """Compatibility module exposing the church domain models."""
 
-from .communication_models import AuditLog, ContactMessage, ContactMessageReply, Notification
+from .communication_models import AuditLog, BackgroundJob, ContactMessage, ContactMessageReply, Notification
 from .content_models import Event, Member, Page, Sermon
 from .model_helpers import (
     _default_invite_expiry,
@@ -17,6 +17,7 @@ from .tenant_models import Church, ChurchInvitation, ChurchMembership, SiteSetti
 
 __all__ = [
     "AuditLog",
+    "BackgroundJob",
     "Church",
     "ChurchInvitation",
     "ChurchMembership",

@@ -23,7 +23,12 @@ from .limits import get_plan_usage
 from .models import AuditLog, Church, ChurchMembership, Notification
 from .notifications import notify_user
 from .permissions import CAP_MANAGE_SITE_SETTINGS, require_capability
-from .view_helpers import _querystring_without_page, _schedule_safe_after_commit, _send_invite_email, is_ajax
+from .view_helpers import (
+    _enqueue_invite_email_delivery,
+    _querystring_without_page,
+    _schedule_safe_after_commit,
+    is_ajax,
+)
 
 
 def _superadmin_church_queryset():
@@ -248,8 +253,7 @@ def superadmin_church_create(request):
                     body=f"Vous avez ete invite a administrer {church.name}.",
                     link=reverse('accept_invite', args=[invitation.token]),
                 )
-                invite_url = request.build_absolute_uri(reverse('accept_invite', args=[invitation.token]))
-                _schedule_safe_after_commit(lambda: _send_invite_email(invite_url, invitation))
+                _enqueue_invite_email_delivery(request, invitation)
                 success_message = "Eglise creee et invitation admin envoyee."
 
             if is_ajax(request):

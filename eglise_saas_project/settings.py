@@ -195,6 +195,7 @@ EMAIL_PORT = _env_int('EMAIL_PORT', 587)
 EMAIL_USE_TLS = _env_bool('EMAIL_USE_TLS', default=True)
 EMAIL_USE_SSL = _env_bool('EMAIL_USE_SSL', default=False)
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+BACKGROUND_JOBS_EAGER = _env_bool('BACKGROUND_JOBS_EAGER', default=False)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.User'

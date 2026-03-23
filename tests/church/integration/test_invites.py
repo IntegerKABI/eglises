@@ -1,16 +1,22 @@
 from datetime import timedelta
+from io import StringIO
 from unittest.mock import patch
 
 from django.core import mail
+from django.core.management import call_command
 from django.test import override_settings
 from django.utils import timezone
 from django.urls import reverse
 
-from church.models import AuditLog, ChurchInvitation, ChurchMembership, Notification
+from church.models import AuditLog, BackgroundJob, ChurchInvitation, ChurchMembership, Notification
 from tests.factories import SaaSTestCase
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend", DEFAULT_FROM_EMAIL="tests@example.com")
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    DEFAULT_FROM_EMAIL="tests@example.com",
+    BACKGROUND_JOBS_EAGER=False,
+)
 class InvitationIntegrationTests(SaaSTestCase):
     def setUp(self):
         super().setUp()
@@ -31,6 +37,8 @@ class InvitationIntegrationTests(SaaSTestCase):
 
         invite = ChurchInvitation.objects.get(email=self.invited_user.email)
         self.assertRedirects(response, reverse("manage_users"))
+        self.assertEqual(BackgroundJob.objects.count(), 1)
+        call_command("process_background_jobs", stdout=StringIO())
         self.assertEqual(len(mail.outbox), 1)
         self.assertTrue(AuditLog.objects.filter(church=self.church, action="invite_create").exists())
         self.assertTrue(Notification.objects.filter(church=self.church, recipient=self.invited_user).exists())
@@ -70,20 +78,33 @@ class InvitationIntegrationTests(SaaSTestCase):
 
         invite.refresh_from_db()
         self.assertRedirects(response, reverse("manage_users"))
+        self.assertEqual(BackgroundJob.objects.count(), 1)
+        call_command("process_background_jobs", stdout=StringIO())
         self.assertEqual(len(mail.outbox), 1)
         self.assertGreater(invite.expires_at, old_expiry)
 
-    def test_resend_invite_handles_email_failure_gracefully(self):
+    def test_resend_invite_queues_retry_when_email_delivery_fails(self):
         invite = self.create_invitation(
             self.church,
             self.invited_user.email,
             invited_by=self.admin,
         )
 
-        with patch("church.views._send_invite_email", side_effect=RuntimeError("smtp down")):
-            response = self.client.post(reverse("resend_invite", args=[invite.pk]), follow=True)
+        response = self.client.post(reverse("resend_invite", args=[invite.pk]), follow=True)
 
         self.assertEqual(response.status_code, 200)
+        job = BackgroundJob.objects.get(
+            job_type=BackgroundJob.JobType.SEND_INVITE_EMAIL,
+            status=BackgroundJob.Status.PENDING,
+        )
+
+        with patch("church.background_jobs.send_mail", side_effect=RuntimeError("smtp down")):
+            call_command("process_background_jobs", stdout=StringIO())
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, BackgroundJob.Status.PENDING)
+        self.assertEqual(job.attempts, 1)
+        self.assertIn("smtp down", job.last_error)
 
     def test_manage_users_get_does_not_mutate_expired_invitation_status(self):
         invite = self.create_invitation(

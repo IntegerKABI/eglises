@@ -13,7 +13,7 @@ If you do not activate it, `py manage.py ...` may use the global Python interpre
 ## Local SQLite suite
 
 ```bash
-py manage.py test --noinput
+python manage.py test --noinput
 ```
 
 ## Local PostgreSQL suite with Docker
@@ -39,14 +39,14 @@ DATABASE_SSL_REQUIRE=False
 3. Run migrations and the test suite.
 
 ```bash
-py manage.py migrate
-py manage.py test --noinput
+python manage.py migrate
+python manage.py test --noinput
 ```
 
 4. Run the PostgreSQL locking regression on its own when validating concurrency work.
 
 ```bash
-py manage.py test tests.church.integration.test_postgres_transactions --noinput
+python manage.py test tests.church.integration.test_postgres_transactions --noinput
 ```
 
 ## Browser E2E suite
@@ -61,10 +61,10 @@ python -m playwright install chromium
 Then run the browser journeys.
 
 ```bash
-py manage.py test tests.church.e2e --noinput
+python manage.py test tests.church.e2e --noinput
 ```
 
-If Playwright is installed but the browser process cannot start on your current machine or policy context, the suite now skips cleanly instead of failing the whole test run.
+On Windows, the browser suite is skipped by default because some local environments block the browser subprocess. Set `ENABLE_WINDOWS_PLAYWRIGHT_E2E=1` only when the machine is configured to allow Playwright to launch Chromium.
 
 ## CI coverage
 

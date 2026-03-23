@@ -1,4 +1,5 @@
 import importlib.util
+import os
 import unittest
 from datetime import date, timedelta
 
@@ -28,6 +29,10 @@ class BrowserJourneyTests(StaticLiveServerTestCase):
     def setUpClass(cls):
         if not playwright_available:
             raise unittest.SkipTest("Playwright is not installed in the test environment.")
+        if os.name == "nt" and os.environ.get("ENABLE_WINDOWS_PLAYWRIGHT_E2E") != "1":
+            raise unittest.SkipTest(
+                "Browser E2E tests are disabled on Windows unless ENABLE_WINDOWS_PLAYWRIGHT_E2E=1 is set."
+            )
 
         super().setUpClass()
         from playwright.sync_api import Error, sync_playwright

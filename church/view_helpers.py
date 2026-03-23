@@ -2,15 +2,14 @@
 
 from datetime import timedelta
 import logging
+import sys
 
 logger = logging.getLogger(__name__)
 
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.views import LoginView
 from django.core.exceptions import ValidationError
-from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Q
 from django.http import JsonResponse
@@ -19,6 +18,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .audit import log_audit
+from .background_jobs import enqueue_invite_email_job
 from .limits import enforce_limits_for_model
 from .membership_policy import get_pending_invitations_for_user
 from .models import Church, ChurchInvitation, ChurchMembership, Notification
@@ -135,6 +135,16 @@ def _send_invite_email(invite_url, invite):
     )
 
 
+def _enqueue_invite_email_delivery(request, invite):
+    """Persist an invitation email job so it can be delivered by a worker."""
+    return enqueue_invite_email_job(invite, _build_invite_url(request, invite))
+
+
+def _send_invite_email(invite_url, invite):
+    """Queue invitation delivery through the durable background job store."""
+    return enqueue_invite_email_job(invite, invite_url)
+
+
 def _mark_invite_notifications_read(user, invite):
     Notification.objects.filter(
         recipient=user,
@@ -151,11 +161,7 @@ def _has_pending_invitations(user):
 
 
 def _schedule_safe_after_commit(callback):
-    """Execute side effects after commit, with deterministic behavior in tests."""
-    import sys
-    import threading
-    from django.db import connection
-
+    """Run a callback after commit without spawning background threads."""
     running_tests = "test" in sys.argv
 
     def run_callback():
@@ -169,13 +175,7 @@ def _schedule_safe_after_commit(callback):
         run_callback()
         return
 
-    def threaded_callback():
-        try:
-            run_callback()
-        finally:
-            connection.close()
-
-    transaction.on_commit(lambda: threading.Thread(target=threaded_callback, daemon=True).start())
+    transaction.on_commit(run_callback)
 
 
 def _require_church(request):
