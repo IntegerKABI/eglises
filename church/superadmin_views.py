@@ -1,10 +1,6 @@
 """Superadmin tenant management views."""
 
-import logging
-
 from django.contrib import messages
-
-logger = logging.getLogger(__name__)
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Prefetch, Q
@@ -12,7 +8,6 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-from .audit import log_audit
 from .forms import (
     SuperAdminChurchCreateForm,
     SuperAdminChurchPlanForm,
@@ -20,18 +15,21 @@ from .forms import (
     SuperAdminChurchUpdateForm,
 )
 from .limits import get_plan_usage
-from .models import AuditLog, Church, ChurchMembership, Notification
-from .notifications import notify_user
+from .models import AuditLog, Church, ChurchMembership
 from .permissions import CAP_MANAGE_SITE_SETTINGS, require_capability
 from .rate_limits import (
     build_invite_send_rate_limit_rules,
     build_rate_limit_message,
     consume_rate_limits,
 )
+from .superadmin_services import (
+    create_church_from_form,
+    update_church_plan_from_form,
+    update_church_profile_from_form,
+    update_church_status_from_form,
+)
 from .view_helpers import (
-    _enqueue_invite_email_delivery,
     _querystring_without_page,
-    _schedule_safe_after_commit,
     is_ajax,
 )
 
@@ -99,19 +97,6 @@ def _build_effective_limit_rows(church):
             }
         )
     return rows
-
-
-def _audit_superadmin_church_action(*, actor, church, action, metadata=None):
-    try:
-        log_audit(
-            actor=actor,
-            church=church,
-            action=action,
-            instance=church,
-            metadata=metadata or {},
-        )
-    except Exception:
-        logger.error(f"Failed to log superadmin action: {action}", exc_info=True)
 
 
 @login_required
@@ -222,63 +207,9 @@ def superadmin_church_create(request):
                     },
                 )
         if form.is_valid():
-            church = form.save(invited_by=request.user)
-            invitation = getattr(form, 'created_invitation', None)
-            membership = getattr(form, 'created_membership', None)
-
-            def after_commit():
-                _audit_superadmin_church_action(
-                    actor=request.user,
-                    church=church,
-                    action='tenant_create',
-                    metadata={
-                        'status': church.status,
-                        'plan': church.plan,
-                    },
-                )
-                if membership is not None:
-                    try:
-                        log_audit(
-                            actor=request.user,
-                            church=church,
-                            action='tenant_assign_admin',
-                            instance=membership,
-                            metadata={
-                                'user_id': form.created_admin_user.pk,
-                                'username': form.created_admin_user.username,
-                            },
-                        )
-                    except Exception:
-                        logger.error("Failed to log tenant_assign_admin action", exc_info=True)
-                if invitation is not None:
-                    try:
-                        log_audit(
-                            actor=request.user,
-                            church=church,
-                            action='tenant_invite_admin',
-                            instance=invitation,
-                            metadata={
-                                'email': invitation.email,
-                                'user_id': form.created_admin_user.pk,
-                            },
-                        )
-                    except Exception:
-                        logger.error("Failed to log tenant_invite_admin action", exc_info=True)
-
-            _schedule_safe_after_commit(after_commit)
-
-            success_message = "Eglise creee avec son premier administrateur."
-            if invitation is not None:
-                notify_user(
-                    form.created_admin_user,
-                    church,
-                    Notification.Category.INVITE,
-                    "Invitation a administrer une eglise",
-                    body=f"Vous avez ete invite a administrer {church.name}.",
-                    link=reverse('accept_invite', args=[invitation.token]),
-                )
-                _enqueue_invite_email_delivery(request, invitation)
-                success_message = "Eglise creee et invitation admin envoyee."
+            result = create_church_from_form(request=request, actor=request.user, form=form)
+            church = result.church
+            success_message = result.success_message
 
             if is_ajax(request):
                 return JsonResponse(
@@ -315,16 +246,7 @@ def superadmin_church_edit(request, pk):
     if request.method == 'POST':
         form = SuperAdminChurchUpdateForm(request.POST, request.FILES, instance=managed_church)
         if form.is_valid():
-            church = form.save()
-
-            _schedule_safe_after_commit(
-                lambda: _audit_superadmin_church_action(
-                    actor=request.user,
-                    church=church,
-                    action='tenant_update',
-                    metadata={'section': 'profile'},
-                )
-            )
+            church = update_church_profile_from_form(actor=request.user, form=form)
 
             if is_ajax(request):
                 return JsonResponse(
@@ -362,18 +284,10 @@ def superadmin_church_status(request, pk):
     if request.method == 'POST':
         form = SuperAdminChurchStatusForm(request.POST, instance=managed_church)
         if form.is_valid():
-            church = form.save()
-
-            _schedule_safe_after_commit(
-                lambda: _audit_superadmin_church_action(
-                    actor=request.user,
-                    church=church,
-                    action='tenant_status_update',
-                    metadata={
-                        'previous_status': previous_status,
-                        'new_status': church.status,
-                    },
-                )
+            church = update_church_status_from_form(
+                actor=request.user,
+                form=form,
+                previous_status=previous_status,
             )
 
             if is_ajax(request):
@@ -410,19 +324,10 @@ def superadmin_church_plan(request, pk):
     if request.method == 'POST':
         form = SuperAdminChurchPlanForm(request.POST, instance=managed_church)
         if form.is_valid():
-            church = form.save()
-            after_limits = _serialize_limit_configuration(church)
-
-            _schedule_safe_after_commit(
-                lambda: _audit_superadmin_church_action(
-                    actor=request.user,
-                    church=church,
-                    action='tenant_plan_update',
-                    metadata={
-                        'previous_plan': before_limits,
-                        'current_plan': after_limits,
-                    },
-                )
+            church = update_church_plan_from_form(
+                actor=request.user,
+                form=form,
+                previous_limits=before_limits,
             )
 
             if is_ajax(request):

@@ -1,9 +1,5 @@
 """Dashboard views and the historical public import surface for the church app."""
-
-from datetime import timedelta
 import logging
-
-from django.contrib.auth import get_user_model
 
 logger = logging.getLogger(__name__)
 from django.contrib import messages
@@ -31,7 +27,25 @@ from .forms import (
     SermonForm,
     TransferAdminForm,
 )
+from .invitation_services import (
+    create_invitation_from_form,
+    resend_invitation as resend_invitation_service,
+    revoke_invitation as revoke_invitation_service,
+)
 from .limits import enforce_limits_for_model, filter_messages_for_retention, get_plan_usage
+from .membership_services import (
+    assign_membership_from_form,
+    set_membership_active_state,
+    transfer_admin_role,
+    update_membership,
+)
+from .message_services import (
+    archive_message,
+    assign_message_to_user,
+    mark_message_as_read,
+    respond_to_message,
+    unassign_message,
+)
 from .models import Church, ChurchInvitation, ChurchMembership, ContactMessage, Event, Member, Page, Sermon
 from .notifications import (
     notify_church_admins,
@@ -92,10 +106,8 @@ from .view_helpers import (
     _get_choice_param,
     _get_text_param,
     _parse_bool_param,
-    _mark_invite_notifications_read,
     _handle_church_delete,
     _handle_church_form,
-    _enqueue_invite_email_delivery,
     _querystring_without_page,
     _require_church,
     _schedule_safe_after_commit,
@@ -693,39 +705,13 @@ def assign_user(request):
         form = ChurchMembershipAssignForm(request.POST, church=church)
         if form.is_valid():
             try:
-                with transaction.atomic():
-                    membership = form.save(church=church)
-                    created = getattr(form, 'created', False)
-                    action_title = "Accès accordé" if created else "Rôle mis à jour"
-                    audit_action = "membership_assign" if created else "membership_update"
-
-                    def after_commit():
-                        try:
-                            log_audit(
-                                actor=request.user,
-                                church=church,
-                                action=audit_action,
-                                instance=membership,
-                                metadata={"role": membership.role},
-                            )
-                        except Exception:
-                            logger.error("Failed to log membership_assign action", exc_info=True)
-                        notify_user_role_change(
-                            church,
-                            membership.user,
-                            title=action_title,
-                            body=f"Votre rôle pour {church.name} est maintenant {membership.get_role_display()}",
-                            link=reverse('dashboard'),
-                            actor=request.user,
-                        )
-
-                    _schedule_safe_after_commit(after_commit)
+                assign_membership_from_form(actor=request.user, church=church, form=form)
             except ValidationError as exc:
                 form.add_error(None, exc)
             else:
                 if is_ajax(request):
-                    return JsonResponse({'success': True, 'message': 'Utilisateur assign? !', 'redirect': reverse('manage_users')})
-                messages.success(request, 'Utilisateur assign? !')
+                    return JsonResponse({'success': True, 'message': 'Utilisateur assigné !', 'redirect': reverse('manage_users')})
+                messages.success(request, 'Utilisateur assigné !')
                 return redirect('manage_users')
         if is_ajax(request):
             return JsonResponse({'success': False, 'errors': form.errors}, status=400)
@@ -758,38 +744,7 @@ def invite_user(request):
             return redirect('manage_users')
         form = ChurchInvitationForm(request.POST, church=church, invited_by=request.user)
         if form.is_valid():
-            with transaction.atomic():
-                invite = form.save()
-                try:
-                    log_audit(
-                        actor=request.user,
-                        church=church,
-                        action="invite_create",
-                        instance=invite,
-                        metadata={"email": invite.email, "role": invite.role},
-                    )
-                except Exception:
-                    logger.error("Failed to log invite_create action", exc_info=True)
-                notify_church_admins(
-                    church,
-                    category="invite",
-                    title="Invitation envoyée",
-                    body=f"{invite.email} - {invite.get_role_display()}",
-                    link=reverse('manage_users'),
-                    exclude=request.user,
-                )
-                User = get_user_model()
-                invited_user = User.objects.filter(email__iexact=invite.email).first()
-                if invited_user:
-                    notify_user(
-                        invited_user,
-                        church,
-                        category="invite",
-                        title="Invitation à rejoindre l'église",
-                        body=f"Invitation pour {church.name} ({invite.get_role_display()}).",
-                        link=reverse('accept_invite', args=[invite.token]),
-                    )
-                _enqueue_invite_email_delivery(request, invite)
+            create_invitation_from_form(request=request, actor=request.user, church=church, form=form)
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': "Invitation envoyée.", 'redirect': reverse('manage_users')})
             messages.success(request, "Invitation envoyée.")
@@ -814,29 +769,7 @@ def revoke_invite(request, pk):
         return redirect('select_church')
     invite = get_object_or_404(ChurchInvitation, pk=pk, church=church)
     if request.method == 'POST' and invite.status == ChurchInvitation.Status.PENDING:
-        invite.status = ChurchInvitation.Status.REVOKED
-        invite.save(update_fields=['status'])
-        try:
-            log_audit(
-                actor=request.user,
-                church=church,
-                action="invite_revoke",
-                instance=invite,
-                metadata={"email": invite.email},
-            )
-        except Exception:
-            logger.error("Failed to log invite_revoke action", exc_info=True)
-        invited_user = get_user_model().objects.filter(email__iexact=invite.email).first()
-        if invited_user:
-            _mark_invite_notifications_read(invited_user, invite)
-        notify_church_admins(
-            church,
-            category="invite",
-            title="Invitation révoquée",
-            body=f"{invite.email} - {invite.get_role_display()}",
-            link=reverse('manage_users'),
-            exclude=request.user,
-        )
+        revoke_invitation_service(actor=request.user, church=church, invite=invite)
         messages.success(request, "Invitation révoquée.")
     return redirect('manage_users')
 
@@ -855,28 +788,7 @@ def resend_invite(request, pk):
         if throttle_result.limited:
             messages.error(request, build_rate_limit_message(throttle_result.retry_after_seconds))
             return redirect('manage_users')
-        with transaction.atomic():
-            invite.expires_at = timezone.now() + timedelta(days=7)
-            invite.save(update_fields=['expires_at'])
-            try:
-                log_audit(
-                    actor=request.user,
-                    church=church,
-                    action="invite_resend",
-                    instance=invite,
-                    metadata={"email": invite.email},
-                )
-            except Exception:
-                logger.error("Failed to log invite_resend action", exc_info=True)
-            _enqueue_invite_email_delivery(request, invite)
-            notify_church_admins(
-                church,
-                category="invite",
-                title="Invitation renvoyée",
-                body=f"{invite.email} - {invite.get_role_display()}",
-                link=reverse('manage_users'),
-                exclude=request.user,
-            )
+        resend_invitation_service(request=request, actor=request.user, church=church, invite=invite)
         messages.success(request, "Invitation renvoyée.")
     return redirect('manage_users')
 
@@ -896,42 +808,12 @@ def toggle_membership(request, pk):
         return redirect('manage_users')
 
     try:
-        with transaction.atomic():
-            membership = get_object_or_404(
-                ChurchMembership.objects.select_for_update().select_related('user'),
-                pk=pk,
-                church=church,
-            )
-            if action == 'deactivate' and membership.is_active:
-                membership.is_active = False
-            elif action == 'activate':
-                if not membership.is_active:
-                    enforce_limits_for_model(church, ChurchMembership)
-                membership.is_active = True
-            membership.save(update_fields=['is_active'])
-            status_label = "actif" if membership.is_active else "inactif"
-
-            def after_commit():
-                try:
-                    log_audit(
-                        actor=request.user,
-                        church=church,
-                        action="membership_status",
-                        instance=membership,
-                        metadata={"active": membership.is_active},
-                    )
-                except Exception:
-                    logger.error("Failed to log membership_status action", exc_info=True)
-                notify_user_role_change(
-                    church,
-                    membership.user,
-                    title="Statut utilisateur mis à jour",
-                    body=f"Votre acc?s est maintenant {status_label} pour {church.name}.",
-                    link=reverse('dashboard'),
-                    actor=request.user,
-                )
-
-            _schedule_safe_after_commit(after_commit)
+        set_membership_active_state(
+            actor=request.user,
+            church=church,
+            membership_id=pk,
+            is_active=(action == 'activate'),
+        )
     except ValidationError as exc:
         messages.error(request, exc.messages[0])
         return redirect('manage_users')
@@ -963,58 +845,15 @@ def transfer_admin(request):
 
     if request.method == 'POST':
         if form.is_valid():
-            target_id = form.cleaned_data['membership'].pk
-            with transaction.atomic():
-                current_membership = get_object_or_404(
-                    ChurchMembership.objects.select_for_update().select_related('user'),
-                    pk=current_membership.pk,
-                    church=church,
-                )
-                target = get_object_or_404(
-                    ChurchMembership.objects.select_for_update().select_related('user'),
-                    pk=target_id,
-                    church=church,
-                )
-                target.role = ChurchMembership.Role.ADMIN
-                target.is_active = True
-                target.save(update_fields=['role', 'is_active'])
-                if current_membership.pk != target.pk:
-                    current_membership.role = ChurchMembership.Role.STAFF
-                    current_membership.save(update_fields=['role'])
-
-                def after_commit():
-                    try:
-                        log_audit(
-                            actor=request.user,
-                            church=church,
-                            action="membership_transfer_admin",
-                            instance=target,
-                            metadata={"from_user": current_membership.user_id},
-                        )
-                    except Exception:
-                        logger.error("Failed to log membership_transfer_admin action", exc_info=True)
-                    notify_user_role_change(
-                        church,
-                        target.user,
-                        title="Administration transférée",
-                        body=f"Vous ?tes maintenant administrateur de {church.name}.",
-                        link=reverse('manage_users'),
-                        actor=request.user,
-                    )
-                    if current_membership.user != target.user:
-                        notify_user_role_change(
-                            church,
-                            current_membership.user,
-                            title="Administration transférée",
-                            body=f"Votre rôle est maintenant {current_membership.get_role_display()} pour {church.name}.",
-                            link=reverse('manage_users'),
-                            actor=request.user,
-                        )
-
-                _schedule_safe_after_commit(after_commit)
+            transfer_admin_role(
+                actor=request.user,
+                church=church,
+                current_membership_id=current_membership.pk,
+                target_membership_id=form.cleaned_data['membership'].pk,
+            )
             if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Administrateur transf?r?.', 'redirect': reverse('manage_users')})
-            messages.success(request, "Administrateur transf?r?.")
+                return JsonResponse({'success': True, 'message': 'Administrateur transféré.', 'redirect': reverse('manage_users')})
+            messages.success(request, "Administrateur transféré.")
             return redirect('manage_users')
         if is_ajax(request):
             return JsonResponse({'success': False, 'errors': form.errors}, status=400)
@@ -1022,7 +861,7 @@ def transfer_admin(request):
     return render(request, 'admin_dashboard/transfer_admin.html', {
         'church': church,
         'form': form,
-        'title': "Transf?rer l'administration",
+        'title': "Transférer l'administration",
     })
 
 
@@ -1033,54 +872,18 @@ def edit_membership(request, pk):
     if not church:
         return redirect('select_church')
     membership = get_object_or_404(ChurchMembership, pk=pk, church=church)
-    old_role = membership.role
-    old_active = membership.is_active
 
     if request.method == 'POST':
         form = ChurchMembershipUpdateForm(request.POST, instance=membership)
         if form.is_valid():
             try:
-                with transaction.atomic():
-                    membership = get_object_or_404(
-                        ChurchMembership.objects.select_for_update().select_related('user'),
-                        pk=pk,
-                        church=church,
-                    )
-                    old_role = membership.role
-                    old_active = membership.is_active
-                    form = ChurchMembershipUpdateForm(request.POST, instance=membership)
-                    if not form.is_valid():
-                        raise ValidationError(form.errors)
-                    if not old_active and form.cleaned_data.get('is_active'):
-                        enforce_limits_for_model(church, ChurchMembership)
-                    membership = form.save()
-                    if membership.role != old_role or membership.is_active != old_active:
-                        status_label = "actif" if membership.is_active else "inactif"
-
-                        def after_commit():
-                            try:
-                                log_audit(
-                                    actor=request.user,
-                                    church=church,
-                                    action="membership_update",
-                                    instance=membership,
-                                    metadata={
-                                        "role": membership.role,
-                                        "active": membership.is_active,
-                                    },
-                                )
-                            except Exception:
-                                logger.error("Failed to log membership_update action", exc_info=True)
-                            notify_user_role_change(
-                                church,
-                                membership.user,
-                                title="Rôle mis à jour",
-                                body=f"Rôle: {membership.get_role_display()} (statut: {status_label}).",
-                                link=reverse('manage_users'),
-                                actor=request.user,
-                            )
-
-                        _schedule_safe_after_commit(after_commit)
+                membership = update_membership(
+                    actor=request.user,
+                    church=church,
+                    membership_id=pk,
+                    role=form.cleaned_data['role'],
+                    is_active=form.cleaned_data['is_active'],
+                )
             except ValidationError as exc:
                 form.add_error(None, exc)
             else:
@@ -1151,38 +954,31 @@ def read_message(request, pk):
         pk=pk,
         church=church,
     )
-    if request.method == 'GET' and msg.status == ContactMessage.Status.NEW:
-        msg.status = ContactMessage.Status.READ
-        msg.save(update_fields=['status', 'is_read'])
+    if request.method == 'GET':
+        msg = mark_message_as_read(msg)
     reply_form = ContactMessageReplyForm()
     if request.method == 'POST':
         action = request.POST.get('action')
         if action == 'mark_read':
-            if msg.status == ContactMessage.Status.NEW:
-                msg.status = ContactMessage.Status.READ
-                msg.save(update_fields=['status', 'is_read'])
+            msg = mark_message_as_read(msg)
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': 'Message marqué comme lu.'})
             messages.success(request, 'Message marqué comme lu.')
             return redirect('read_message', pk=pk)
         if action == 'archive':
-            msg.status = ContactMessage.Status.ARCHIVED
-            msg.archived_at = timezone.now()
-            msg.save(update_fields=['status', 'archived_at', 'is_read'])
+            msg = archive_message(msg)
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': 'Message archivé.'})
             messages.success(request, 'Message archivé.')
             return redirect('read_message', pk=pk)
         if action == 'assign_me':
-            msg.assigned_to = request.user
-            msg.save(update_fields=['assigned_to'])
+            msg = assign_message_to_user(message=msg, user=request.user)
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': 'Message assigné.'})
             messages.success(request, 'Message assigné.')
             return redirect('read_message', pk=pk)
         if action == 'unassign':
-            msg.assigned_to = None
-            msg.save(update_fields=['assigned_to'])
+            msg = unassign_message(msg)
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': 'Assignation retirée.'})
             messages.success(request, "Assignation retirée.")
@@ -1190,14 +986,8 @@ def read_message(request, pk):
         if action == 'respond':
             reply_form = ContactMessageReplyForm(request.POST)
             if reply_form.is_valid():
-                reply = reply_form.save(commit=False)
-                reply.message = msg
-                reply.created_by = request.user
-                reply.save()
-                msg.status = ContactMessage.Status.RESPONDED
-                msg.responded_at = timezone.now()
-                msg.responded_by = request.user
-                msg.save(update_fields=['status', 'responded_at', 'responded_by', 'is_read'])
+                response_result = respond_to_message(actor=request.user, message=msg, reply_form=reply_form)
+                msg = response_result.message
                 if is_ajax(request):
                     return JsonResponse({'success': True, 'message': 'Réponse enregistrée.'})
                 messages.success(request, 'Réponse enregistrée.')

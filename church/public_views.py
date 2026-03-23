@@ -9,7 +9,6 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.db import transaction
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -20,9 +19,9 @@ from .cache import cache_public_view, get_church_cache_version
 
 from .audit import log_audit
 from .forms import ContactForm, InviteSignupForm
-from .limits import enforce_limits_for_model
+from .invitation_services import accept_invitation
 from .membership_policy import get_pending_invitations_for_user, validate_single_church_membership
-from .models import Church, ChurchInvitation, ChurchMembership, ContactMessage, Page, filter_public_queryset
+from .models import Church, ChurchInvitation, ContactMessage, Page, filter_public_queryset
 from .notifications import notify_church_admins, notify_message_recipients, notify_user
 from .rate_limits import (
     build_contact_rate_limit_rules,
@@ -254,62 +253,7 @@ def accept_invite(request, token):
         return redirect('pending_invitations')
 
     if request.method == 'POST':
-        with transaction.atomic():
-            membership = (
-                ChurchMembership.objects.select_for_update()
-                .filter(user=request.user, church=invite.church)
-                .first()
-            )
-            if membership:
-                new_role = invite.role
-                if membership.role == ChurchMembership.Role.ADMIN and invite.role != ChurchMembership.Role.ADMIN:
-                    new_role = membership.role
-                if membership.role != new_role:
-                    membership.role = new_role
-                if not membership.is_active:
-                    enforce_limits_for_model(invite.church, ChurchMembership)
-                membership.is_active = True
-                membership.save(update_fields=['role', 'is_active'])
-            else:
-                enforce_limits_for_model(invite.church, ChurchMembership)
-                ChurchMembership.objects.create(
-                    user=request.user,
-                    church=invite.church,
-                    role=invite.role,
-                    is_active=True,
-                )
-            invite.status = ChurchInvitation.Status.ACCEPTED
-            invite.accepted_at = timezone.now()
-            invite.accepted_by = request.user
-            invite.save(update_fields=['status', 'accepted_at', 'accepted_by'])
-        try:
-            log_audit(
-                actor=request.user,
-                church=invite.church,
-                action="invite_accept",
-                instance=invite,
-                metadata={"email": invite.email, "role": invite.role},
-            )
-        except Exception:
-            logger.error("Failed to log invite_accept action", exc_info=True)
-        notify_church_admins(
-            invite.church,
-            category="invite",
-            title="Invitation acceptée",
-            body=f"{request.user.get_full_name() or request.user.username} a rejoint l'église.",
-            link=reverse('manage_users'),
-            exclude=request.user,
-        )
-        if invite.invited_by and invite.invited_by != request.user:
-            notify_user(
-                invite.invited_by,
-                invite.church,
-                category="invite",
-                title="Invitation acceptée",
-                body=f"{request.user.get_full_name() or request.user.username} a accepté l'invitation.",
-                link=reverse('manage_users'),
-            )
-        _mark_invite_notifications_read(request.user, invite)
+        accept_invitation(actor=request.user, invite=invite)
         messages.success(request, "Invitation acceptée. Bienvenue !")
         return redirect('dashboard')
 

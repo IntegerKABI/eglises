@@ -96,7 +96,7 @@ class MembershipIntegrationTests(SaaSTestCase):
             response.content,
             {
                 "success": True,
-                "message": "Administrateur transf?r?.",
+                "message": "Administrateur transféré.",
                 "redirect": reverse("manage_users"),
             },
         )
