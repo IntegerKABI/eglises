@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from church.models import (
     Church,
+    ChurchMembership,
     Event,
     Member,
     Page,
@@ -121,6 +122,39 @@ class ChurchModelTests(SaaSTestCase):
         settings_obj.save()
 
         self.assertNotEqual(cache.get("site_settings:singleton:v1"), "stale")
+
+    def test_existing_church_cannot_be_activated_without_an_active_admin(self):
+        church = self.create_church(name="Draft Church", status=Church.Status.DRAFT)
+        church.status = Church.Status.ACTIVE
+
+        with self.assertRaises(ValidationError):
+            church.full_clean()
+
+    def test_last_active_admin_cannot_be_deactivated_in_active_church(self):
+        church = self.create_church(name="Active Church")
+        admin = self.create_user(username="active-admin")
+        membership = self.add_membership(admin, church, role=ChurchMembership.Role.ADMIN)
+        membership.is_active = False
+
+        with self.assertRaises(ValidationError):
+            membership.save()
+
+    def test_last_active_admin_cannot_be_demoted_in_active_church(self):
+        church = self.create_church(name="Demotion Church")
+        admin = self.create_user(username="demotion-admin")
+        membership = self.add_membership(admin, church, role=ChurchMembership.Role.ADMIN)
+        membership.role = ChurchMembership.Role.STAFF
+
+        with self.assertRaises(ValidationError):
+            membership.save()
+
+    def test_last_active_admin_cannot_be_deleted_in_active_church(self):
+        church = self.create_church(name="Deletion Church")
+        admin = self.create_user(username="delete-admin")
+        membership = self.add_membership(admin, church, role=ChurchMembership.Role.ADMIN)
+
+        with self.assertRaises(ValidationError):
+            membership.delete()
 
     def test_upload_paths_use_expected_prefix_and_lowercase_extension(self):
         self.assertTrue(upload_church_logo(None, "Logo.PNG").startswith("churches/logos/"))

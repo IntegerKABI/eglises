@@ -143,10 +143,12 @@ class SuperAdminChurchFormTests(SaaSTestCase):
         )
 
         self.assertFalse(form.is_valid())
-        self.assertIn("status", form.errors)
+        self.assertIn("__all__", form.errors)
 
     def test_plan_form_accepts_override_updates(self):
         church = self.create_church(name="Plan Church", plan=Church.Plan.STARTER)
+        admin = self.create_user(username="plan-admin", email="plan-admin@example.com")
+        self.add_membership(admin, church, role=ChurchMembership.Role.ADMIN)
         form = SuperAdminChurchPlanForm(
             data={
                 "plan": Church.Plan.SCALE,

@@ -182,22 +182,6 @@ class SuperAdminChurchStatusForm(forms.ModelForm):
         model = Church
         fields = ['status']
 
-    def clean_status(self):
-        status = self.cleaned_data['status']
-        if (
-            status == Church.Status.ACTIVE
-            and self.instance.pk
-            and not ChurchMembership.objects.filter(
-                church=self.instance,
-                role=ChurchMembership.Role.ADMIN,
-                is_active=True,
-            ).exists()
-        ):
-            raise ValidationError(
-                "Une eglise active doit avoir au moins un administrateur actif."
-            )
-        return status
-
 
 class SuperAdminChurchCreateForm(forms.ModelForm):
     """Create a tenant and either invite or attach its first administrator."""
@@ -541,30 +525,6 @@ class ChurchMembershipUpdateForm(forms.ModelForm):
     class Meta:
         model = ChurchMembership
         fields = ['role', 'is_active']
-
-    def clean(self):
-        cleaned_data = super().clean()
-        if not self.instance or not self.instance.pk:
-            return cleaned_data
-        new_role = cleaned_data.get('role')
-        new_active = cleaned_data.get('is_active')
-        if (
-            self.instance.role == ChurchMembership.Role.ADMIN
-            and (new_role != ChurchMembership.Role.ADMIN or not new_active)
-        ):
-            other_admins = ChurchMembership.objects.filter(
-                church=self.instance.church,
-                role=ChurchMembership.Role.ADMIN,
-                is_active=True,
-            ).exclude(pk=self.instance.pk)
-            if not other_admins.exists():
-                raise ValidationError("Au moins un administrateur actif est requis.")
-        if new_active:
-            validate_single_church_membership(
-                self.instance.user,
-                church=self.instance.church,
-            )
-        return cleaned_data
 
 
 class ChurchInvitationForm(forms.ModelForm):

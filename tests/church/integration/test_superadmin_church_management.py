@@ -149,6 +149,8 @@ class SuperAdminChurchManagementIntegrationTests(SaaSTestCase):
     def test_superadmin_can_update_tenant_profile(self):
         self.client.force_login(self.superuser)
         church = self.create_church(name="Profile Church", city="Kinshasa")
+        admin = self.create_user(username="profile-admin", email="profile-admin@example.com")
+        self.add_membership(admin, church, role=ChurchMembership.Role.ADMIN)
 
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(
@@ -180,6 +182,8 @@ class SuperAdminChurchManagementIntegrationTests(SaaSTestCase):
     def test_superadmin_can_update_tenant_plan(self):
         self.client.force_login(self.superuser)
         church = self.create_church(name="Plan Church")
+        admin = self.create_user(username="plan-admin", email="plan-admin@example.com")
+        self.add_membership(admin, church, role=ChurchMembership.Role.ADMIN)
 
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(

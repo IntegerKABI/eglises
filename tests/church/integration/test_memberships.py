@@ -1,6 +1,6 @@
 from django.urls import reverse
 
-from church.models import ChurchMembership
+from church.models import Church, ChurchMembership
 from tests.factories import SaaSTestCase
 
 
@@ -114,4 +114,46 @@ class MembershipIntegrationTests(SaaSTestCase):
         membership.refresh_from_db()
         self.assertRedirects(response, reverse("manage_users"))
         self.assertEqual(membership.role, ChurchMembership.Role.SECRETARY)
+
+    def test_toggle_membership_rejects_deactivation_of_last_active_admin(self):
+        membership = ChurchMembership.objects.get(user=self.admin, church=self.church)
+
+        response = self.client.post(
+            reverse("toggle_membership", args=[membership.pk]),
+            {"action": "deactivate"},
+            follow=True,
+        )
+
+        membership.refresh_from_db()
+        self.assertRedirects(response, reverse("manage_users"))
+        self.assertTrue(membership.is_active)
+        self.assertContains(response, "Au moins un administrateur actif est requis.")
+
+    def test_edit_membership_rejects_demoting_last_active_admin(self):
+        membership = ChurchMembership.objects.get(user=self.admin, church=self.church)
+
+        response = self.client.post(
+            reverse("edit_membership", args=[membership.pk]),
+            {"role": ChurchMembership.Role.STAFF, "is_active": True},
+        )
+
+        membership.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(membership.role, ChurchMembership.Role.ADMIN)
+        self.assertContains(response, "Au moins un administrateur actif est requis.")
+
+    def test_existing_church_cannot_be_activated_without_an_admin(self):
+        superadmin = self.create_user(username="platform-status-admin", is_superuser=True)
+        self.client.force_login(superadmin)
+        church = self.create_church(name="Inactive Tenant", status=Church.Status.DRAFT)
+
+        response = self.client.post(
+            reverse("superadmin_church_status", args=[church.pk]),
+            {"status": Church.Status.ACTIVE},
+        )
+
+        church.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(church.status, Church.Status.DRAFT)
+        self.assertContains(response, "Une eglise active doit avoir au moins un administrateur actif.")
 

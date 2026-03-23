@@ -126,17 +126,6 @@ def _get_choice_param(request, key, allowed):
     return value if value in allowed else ''
 
 
-def _has_other_admins(church, exclude_membership=None):
-    admins = ChurchMembership.objects.filter(
-        church=church,
-        role=ChurchMembership.Role.ADMIN,
-        is_active=True,
-    )
-    if exclude_membership:
-        admins = admins.exclude(pk=exclude_membership.pk)
-    return admins.exists()
-
-
 def _build_invite_url(request, invite):
     return request.build_absolute_uri(reverse('accept_invite', args=[invite.token]))
 

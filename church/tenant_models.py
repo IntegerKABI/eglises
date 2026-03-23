@@ -164,8 +164,26 @@ class Church(models.Model):
     def __str__(self):
         return self.name
 
+    def has_active_admins(self, *, exclude_membership_id=None):
+        """Return whether the tenant currently has at least one active admin membership."""
+        if not self.pk:
+            return False
+        memberships = self.memberships.filter(
+            role=ChurchMembership.Role.ADMIN,
+            is_active=True,
+        )
+        if exclude_membership_id is not None:
+            memberships = memberships.exclude(pk=exclude_membership_id)
+        return memberships.exists()
+
+    def clean(self):
+        """Reject active tenant states that do not have an active administrator."""
+        super().clean()
+        if self.pk and self.status == self.Status.ACTIVE and not self.has_active_admins():
+            raise ValidationError("Une eglise active doit avoir au moins un administrateur actif.")
+
     def save(self, *args, **kwargs):
-        """Generate a unique slug from the church name."""
+        """Generate a unique slug and enforce tenant lifecycle invariants."""
         queryset = Church.objects.all()
         if self.pk:
             queryset = queryset.exclude(pk=self.pk)
@@ -177,6 +195,7 @@ class Church(models.Model):
             "eglise",
         )
         self.is_active = self.status == self.Status.ACTIVE
+        self.full_clean()
         super().save(*args, **kwargs)
 
     def get_plan_limit(self, resource):
@@ -241,15 +260,64 @@ class ChurchMembership(models.Model):
     def __str__(self):
         return f"{self.user} — {self.church} ({self.get_role_display()})"
 
+    def _get_previous_membership(self):
+        """Return the persisted membership state before the current mutation."""
+        if not self.pk:
+            return None
+        return (
+            type(self)
+            .objects.select_related("church")
+            .only("church_id", "role", "is_active", "church__status")
+            .filter(pk=self.pk)
+            .first()
+        )
+
+    def _validate_admin_transition(self):
+        """Reject changes that would remove the last active admin from an active tenant."""
+        previous_membership = self._get_previous_membership()
+        if previous_membership is None:
+            return
+        if previous_membership.church.status != Church.Status.ACTIVE:
+            return
+
+        removes_active_admin = (
+            previous_membership.role == self.Role.ADMIN
+            and previous_membership.is_active
+            and (
+                self.church_id != previous_membership.church_id
+                or self.role != self.Role.ADMIN
+                or not self.is_active
+            )
+        )
+        if not removes_active_admin:
+            return
+        if previous_membership.church.has_active_admins(exclude_membership_id=self.pk):
+            return
+        raise ValidationError("Au moins un administrateur actif est requis.")
+
     def clean(self):
-        """Enforce the single active church rule for non-superusers."""
+        """Enforce membership and tenant admin invariants."""
         super().clean()
         if self.is_active:
             validate_single_church_membership(self.user, church=self.church)
+        self._validate_admin_transition()
 
     def save(self, *args, **kwargs):
+        """Validate and persist the membership mutation."""
         self.full_clean()
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        """Reject deleting the last active admin from an active tenant."""
+        if (
+            self.pk
+            and self.church.status == Church.Status.ACTIVE
+            and self.role == self.Role.ADMIN
+            and self.is_active
+            and not self.church.has_active_admins(exclude_membership_id=self.pk)
+        ):
+            raise ValidationError("Au moins un administrateur actif est requis.")
+        super().delete(*args, **kwargs)
 
 
 class ChurchInvitation(models.Model):

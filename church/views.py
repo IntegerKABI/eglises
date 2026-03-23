@@ -92,7 +92,6 @@ from .view_helpers import (
     _get_choice_param,
     _get_text_param,
     _parse_bool_param,
-    _has_other_admins,
     _mark_invite_notifications_read,
     _handle_church_delete,
     _handle_church_form,
@@ -904,9 +903,6 @@ def toggle_membership(request, pk):
                 church=church,
             )
             if action == 'deactivate' and membership.is_active:
-                if membership.role == ChurchMembership.Role.ADMIN and not _has_other_admins(church, exclude_membership=membership):
-                    messages.error(request, "Au moins un administrateur actif est requis.")
-                    return redirect('manage_users')
                 membership.is_active = False
             elif action == 'activate':
                 if not membership.is_active:

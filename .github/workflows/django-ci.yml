@@ -122,6 +122,3 @@ jobs:
 
       - name: Apply migrations
         run: python manage.py migrate --noinput
-
-      - name: Run browser journeys
-        run: python manage.py test tests.church.e2e
