@@ -7,6 +7,7 @@ from church.cache import get_church_cache_version
 
 from church.models import (
     Church,
+    ChurchInvitation,
     ChurchMembership,
     Event,
     Member,
@@ -169,6 +170,33 @@ class ChurchModelTests(SaaSTestCase):
 
         with self.assertRaises(ValidationError):
             membership.delete()
+
+    def test_expired_pending_invitation_has_derived_expired_status(self):
+        church = self.create_church(name="Invitation Church")
+        invite = self.create_invitation(
+            church,
+            "expired-invite@example.com",
+            expires_at=timezone.now() - timedelta(minutes=5),
+        )
+
+        self.assertEqual(invite.status, ChurchInvitation.Status.PENDING)
+        self.assertTrue(invite.is_expired)
+        self.assertEqual(invite.effective_status, ChurchInvitation.Status.EXPIRED)
+        self.assertFalse(invite.is_actionable)
+
+    def test_actionable_invitation_queryset_excludes_expired_pending_invites(self):
+        church = self.create_church(name="Actionable Invitation Church")
+        expired_invite = self.create_invitation(
+            church,
+            "expired@example.com",
+            expires_at=timezone.now() - timedelta(minutes=5),
+        )
+        valid_invite = self.create_invitation(church, "valid@example.com")
+
+        actionable_ids = list(ChurchInvitation.objects.actionable().values_list("pk", flat=True))
+
+        self.assertIn(valid_invite.pk, actionable_ids)
+        self.assertNotIn(expired_invite.pk, actionable_ids)
 
     def test_upload_paths_use_expected_prefix_and_lowercase_extension(self):
         self.assertTrue(upload_church_logo(None, "Logo.PNG").startswith("churches/logos/"))

@@ -184,7 +184,7 @@ def _handle_invite_email_job(job: BackgroundJob) -> None:
     if invitation is None:
         logger.warning("Background job %s skipped because invitation %s no longer exists", job.pk, invitation_id)
         return
-    if invitation.status != ChurchInvitation.Status.PENDING or invitation.is_expired:
+    if not invitation.is_actionable:
         logger.info(
             "Background job %s skipped because invitation %s is no longer deliverable",
             job.pk,

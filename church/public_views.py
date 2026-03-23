@@ -212,8 +212,6 @@ def accept_invite(request, token):
             return redirect('pending_invitations')
         return redirect('home')
     if invite.is_expired:
-        invite.status = ChurchInvitation.Status.EXPIRED
-        invite.save(update_fields=['status'])
         messages.error(request, "Cette invitation a expiré.")
         if request.user.is_authenticated:
             return redirect('pending_invitations')

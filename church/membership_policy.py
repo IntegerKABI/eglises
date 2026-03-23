@@ -1,6 +1,5 @@
 from django.apps import apps
 from django.core.exceptions import ValidationError
-from django.utils import timezone
 
 
 SINGLE_CHURCH_MEMBERSHIP_ERROR = (
@@ -51,11 +50,8 @@ def get_pending_invitations_for_user(user):
     ):
         return ChurchInvitation.objects.none()
     return (
-        ChurchInvitation.objects.filter(
-            email__iexact=user.email.strip(),
-            status=ChurchInvitation.Status.PENDING,
-            expires_at__gt=timezone.now(),
-        )
+        ChurchInvitation.objects.actionable()
+        .filter(email__iexact=user.email.strip())
         .select_related("church", "invited_by")
         .order_by("expires_at", "church__name")
     )

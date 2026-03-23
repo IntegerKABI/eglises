@@ -3,7 +3,6 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
@@ -558,11 +557,9 @@ class ChurchInvitationForm(forms.ModelForm):
                 validate_single_church_membership(existing_user, church=self.church)
             if ChurchMembership.objects.filter(church=self.church, user__email__iexact=email, is_active=True).exists():
                 raise ValidationError("Cet utilisateur est déjà membre actif de cette église.")
-            if ChurchInvitation.objects.filter(
+            if ChurchInvitation.objects.actionable().filter(
                 church=self.church,
                 email__iexact=email,
-                status=ChurchInvitation.Status.PENDING,
-                expires_at__gt=timezone.now(),
             ).exists():
                 raise ValidationError("Une invitation en attente existe déjà pour cet email.")
         return email

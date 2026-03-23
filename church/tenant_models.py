@@ -21,6 +21,21 @@ from .model_helpers import (
 )
 
 
+INVITATION_STATUS_PENDING = "pending"
+
+
+class ChurchInvitationQuerySet(models.QuerySet):
+    """Provide lifecycle-aware invitation query helpers."""
+
+    def pending(self):
+        """Return invitations whose persisted state is pending."""
+        return self.filter(status=INVITATION_STATUS_PENDING)
+
+    def actionable(self):
+        """Return pending invitations that are still valid for user actions."""
+        return self.pending().filter(expires_at__gt=timezone.now())
+
+
 class Church(models.Model):
     """Represent a church tenant hosted on the platform."""
 
@@ -325,7 +340,7 @@ class ChurchInvitation(models.Model):
     """Store a church membership invitation for an email address."""
 
     class Status(models.TextChoices):
-        PENDING = "pending", "En attente"
+        PENDING = INVITATION_STATUS_PENDING, "En attente"
         ACCEPTED = "accepted", "Acceptée"
         DECLINED = "declined", "Refusée"
         REVOKED = "revoked", "Révoquée"
@@ -373,6 +388,8 @@ class ChurchInvitation(models.Model):
         verbose_name="Acceptée par",
     )
 
+    objects = ChurchInvitationQuerySet.as_manager()
+
     class Meta:
         verbose_name = "Invitation d'église"
         verbose_name_plural = "Invitations d'église"
@@ -388,6 +405,18 @@ class ChurchInvitation(models.Model):
     def is_expired(self):
         """Return whether the invitation is no longer valid."""
         return self.expires_at and timezone.now() >= self.expires_at
+
+    @property
+    def effective_status(self):
+        """Return the invitation lifecycle state with derived expiry applied."""
+        if self.status == self.Status.PENDING and self.is_expired:
+            return self.Status.EXPIRED
+        return self.status
+
+    @property
+    def is_actionable(self):
+        """Return whether the invitation can still be accepted or declined."""
+        return self.effective_status == self.Status.PENDING
 
 
 class SiteSettings(models.Model):

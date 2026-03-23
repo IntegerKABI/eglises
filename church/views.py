@@ -605,10 +605,8 @@ def manage_users(request):
     if not church:
         return redirect('select_church')
     memberships = ChurchMembership.objects.filter(church=church).select_related('user')
-    pending_invites = ChurchInvitation.objects.filter(
+    pending_invites = ChurchInvitation.objects.actionable().filter(
         church=church,
-        status=ChurchInvitation.Status.PENDING,
-        expires_at__gt=timezone.now(),
     ).select_related('invited_by', 'accepted_by').order_by('-created_at')
     q = _get_text_param(request, 'q', 100)
     if q:

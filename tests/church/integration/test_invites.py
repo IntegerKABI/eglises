@@ -121,6 +121,24 @@ class InvitationIntegrationTests(SaaSTestCase):
         self.assertContains(response, "Utilisateurs")
         self.assertNotContains(response, invite.email)
 
+    def test_accept_invite_expired_path_does_not_persist_expired_status(self):
+        self.client.logout()
+        invite = self.create_invitation(
+            self.church,
+            self.invited_user.email,
+            invited_by=self.admin,
+            expires_at=timezone.now() - timedelta(hours=1),
+        )
+        self.client.force_login(self.invited_user)
+
+        response = self.client.get(reverse("accept_invite", args=[invite.token]), follow=True)
+
+        invite.refresh_from_db()
+        self.assertEqual(invite.status, ChurchInvitation.Status.PENDING)
+        self.assertRedirects(response, reverse("home"))
+        self.assertEqual(response.redirect_chain[0][0], reverse("pending_invitations"))
+        self.assertContains(response, "Cette invitation a expiré")
+
     def test_expired_pending_invitation_does_not_block_new_invite_for_same_email(self):
         self.create_invitation(
             self.church,

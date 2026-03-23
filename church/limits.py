@@ -53,11 +53,7 @@ COUNT_RESOURCE_CONFIG = {
         "model": ChurchInvitation,
         "label": "invitations en attente",
         "annotation": "usage_pending_invitations_count",
-        "queryset": lambda church: ChurchInvitation.objects.filter(
-            church=church,
-            status=ChurchInvitation.Status.PENDING,
-            expires_at__gt=timezone.now(),
-        ),
+        "queryset": lambda church: ChurchInvitation.objects.actionable().filter(church=church),
     },
 }
 
