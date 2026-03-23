@@ -77,7 +77,7 @@ def _build_database_config():
     return dj_database_url.parse(sqlite_url, conn_max_age=0)
 
 
-APP_NAME = 'Eglise SaaS'
+APP_NAME = os.environ.get('APP_NAME', 'Eglise SaaS')
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
@@ -141,6 +141,21 @@ DATABASES = {
     'default': _build_database_config(),
 }
 
+CACHE_URL = os.environ.get('CACHE_URL')
+if CACHE_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': CACHE_URL,
+        }
+    }
+
+SECURE_SSL_REDIRECT = _env_bool('SECURE_SSL_REDIRECT', default=False)
+SESSION_COOKIE_SECURE = _env_bool('SESSION_COOKIE_SECURE', default=not DEBUG)
+CSRF_COOKIE_SECURE = _env_bool('CSRF_COOKIE_SECURE', default=not DEBUG)
+if _env_bool('USE_X_FORWARDED_PROTO', default=False):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -148,8 +163,8 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-LANGUAGE_CODE = 'fr-fr'
-TIME_ZONE = 'Africa/Lubumbashi'
+LANGUAGE_CODE = os.environ.get('LANGUAGE_CODE', 'fr-fr')
+TIME_ZONE = os.environ.get('TIME_ZONE', 'Africa/Lubumbashi')
 USE_I18N = True
 USE_TZ = True
 
