@@ -696,7 +696,7 @@ def assign_user(request):
                 with transaction.atomic():
                     membership = form.save(church=church)
                     created = getattr(form, 'created', False)
-                    action_title = "Acc?s accord?" if created else "R?le mis ? jour"
+                    action_title = "Accès accordé" if created else "Rôle mis à jour"
                     audit_action = "membership_assign" if created else "membership_update"
 
                     def after_commit():
@@ -714,7 +714,7 @@ def assign_user(request):
                             church,
                             membership.user,
                             title=action_title,
-                            body=f"Votre r?le pour {church.name} est maintenant {membership.get_role_display()}",
+                            body=f"Votre rôle pour {church.name} est maintenant {membership.get_role_display()}",
                             link=reverse('dashboard'),
                             actor=request.user,
                         )
@@ -773,7 +773,7 @@ def invite_user(request):
                 notify_church_admins(
                     church,
                     category="invite",
-                    title="Invitation envoy?e",
+                    title="Invitation envoyée",
                     body=f"{invite.email} - {invite.get_role_display()}",
                     link=reverse('manage_users'),
                     exclude=request.user,
@@ -785,14 +785,14 @@ def invite_user(request):
                         invited_user,
                         church,
                         category="invite",
-                        title="Invitation ? rejoindre l'?glise",
+                        title="Invitation à rejoindre l'église",
                         body=f"Invitation pour {church.name} ({invite.get_role_display()}).",
                         link=reverse('accept_invite', args=[invite.token]),
                     )
                 _enqueue_invite_email_delivery(request, invite)
             if is_ajax(request):
-                return JsonResponse({'success': True, 'message': "Invitation envoy?e.", 'redirect': reverse('manage_users')})
-            messages.success(request, "Invitation envoy?e.")
+                return JsonResponse({'success': True, 'message': "Invitation envoyée.", 'redirect': reverse('manage_users')})
+            messages.success(request, "Invitation envoyée.")
             return redirect('manage_users')
         if is_ajax(request):
             return JsonResponse({'success': False, 'errors': form.errors}, status=400)
@@ -832,12 +832,12 @@ def revoke_invite(request, pk):
         notify_church_admins(
             church,
             category="invite",
-            title="Invitation r?voqu?e",
+            title="Invitation révoquée",
             body=f"{invite.email} - {invite.get_role_display()}",
             link=reverse('manage_users'),
             exclude=request.user,
         )
-        messages.success(request, "Invitation r?voqu?e.")
+        messages.success(request, "Invitation révoquée.")
     return redirect('manage_users')
 
 
@@ -872,12 +872,12 @@ def resend_invite(request, pk):
             notify_church_admins(
                 church,
                 category="invite",
-                title="Invitation renvoy?e",
+                title="Invitation renvoyée",
                 body=f"{invite.email} - {invite.get_role_display()}",
                 link=reverse('manage_users'),
                 exclude=request.user,
             )
-        messages.success(request, "Invitation renvoy?e.")
+        messages.success(request, "Invitation renvoyée.")
     return redirect('manage_users')
 
 
@@ -925,7 +925,7 @@ def toggle_membership(request, pk):
                 notify_user_role_change(
                     church,
                     membership.user,
-                    title="Statut utilisateur mis ? jour",
+                    title="Statut utilisateur mis à jour",
                     body=f"Votre acc?s est maintenant {status_label} pour {church.name}.",
                     link=reverse('dashboard'),
                     actor=request.user,
@@ -936,7 +936,7 @@ def toggle_membership(request, pk):
         messages.error(request, exc.messages[0])
         return redirect('manage_users')
 
-    messages.success(request, "Statut utilisateur mis ? jour.")
+    messages.success(request, "Statut utilisateur mis à jour.")
     return redirect('manage_users')
 
 
@@ -996,7 +996,7 @@ def transfer_admin(request):
                     notify_user_role_change(
                         church,
                         target.user,
-                        title="Administration transf?r?e",
+                        title="Administration transférée",
                         body=f"Vous ?tes maintenant administrateur de {church.name}.",
                         link=reverse('manage_users'),
                         actor=request.user,
@@ -1005,8 +1005,8 @@ def transfer_admin(request):
                         notify_user_role_change(
                             church,
                             current_membership.user,
-                            title="Administration transf?r?e",
-                            body=f"Votre r?le est maintenant {current_membership.get_role_display()} pour {church.name}.",
+                            title="Administration transférée",
+                            body=f"Votre rôle est maintenant {current_membership.get_role_display()} pour {church.name}.",
                             link=reverse('manage_users'),
                             actor=request.user,
                         )
@@ -1074,8 +1074,8 @@ def edit_membership(request, pk):
                             notify_user_role_change(
                                 church,
                                 membership.user,
-                                title="R?le mis ? jour",
-                                body=f"R?le: {membership.get_role_display()} (statut: {status_label}).",
+                                title="Rôle mis à jour",
+                                body=f"Rôle: {membership.get_role_display()} (statut: {status_label}).",
                                 link=reverse('manage_users'),
                                 actor=request.user,
                             )
@@ -1085,8 +1085,8 @@ def edit_membership(request, pk):
                 form.add_error(None, exc)
             else:
                 if is_ajax(request):
-                    return JsonResponse({'success': True, 'message': 'R?le mis ? jour !', 'redirect': reverse('manage_users')})
-                messages.success(request, 'R?le mis ? jour !')
+                    return JsonResponse({'success': True, 'message': 'Rôle mis à jour !', 'redirect': reverse('manage_users')})
+                messages.success(request, 'Rôle mis à jour !')
                 return redirect('manage_users')
         if is_ajax(request):
             return JsonResponse({'success': False, 'errors': form.errors}, status=400)
@@ -1162,30 +1162,30 @@ def read_message(request, pk):
                 msg.status = ContactMessage.Status.READ
                 msg.save(update_fields=['status', 'is_read'])
             if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Message marquÃ© comme lu.'})
-            messages.success(request, 'Message marquÃ© comme lu.')
+                return JsonResponse({'success': True, 'message': 'Message marqué comme lu.'})
+            messages.success(request, 'Message marqué comme lu.')
             return redirect('read_message', pk=pk)
         if action == 'archive':
             msg.status = ContactMessage.Status.ARCHIVED
             msg.archived_at = timezone.now()
             msg.save(update_fields=['status', 'archived_at', 'is_read'])
             if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Message archivÃ©.'})
-            messages.success(request, 'Message archivÃ©.')
+                return JsonResponse({'success': True, 'message': 'Message archivé.'})
+            messages.success(request, 'Message archivé.')
             return redirect('read_message', pk=pk)
         if action == 'assign_me':
             msg.assigned_to = request.user
             msg.save(update_fields=['assigned_to'])
             if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Message assignÃ©.'})
-            messages.success(request, 'Message assignÃ©.')
+                return JsonResponse({'success': True, 'message': 'Message assigné.'})
+            messages.success(request, 'Message assigné.')
             return redirect('read_message', pk=pk)
         if action == 'unassign':
             msg.assigned_to = None
             msg.save(update_fields=['assigned_to'])
             if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Assignation retirÃ©e.'})
-            messages.success(request, "Assignation retirÃ©e.")
+                return JsonResponse({'success': True, 'message': 'Assignation retirée.'})
+            messages.success(request, "Assignation retirée.")
             return redirect('read_message', pk=pk)
         if action == 'respond':
             reply_form = ContactMessageReplyForm(request.POST)
@@ -1199,8 +1199,8 @@ def read_message(request, pk):
                 msg.responded_by = request.user
                 msg.save(update_fields=['status', 'responded_at', 'responded_by', 'is_read'])
                 if is_ajax(request):
-                    return JsonResponse({'success': True, 'message': 'RÃ©ponse enregistrÃ©e.'})
-                messages.success(request, 'RÃ©ponse enregistrÃ©e.')
+                    return JsonResponse({'success': True, 'message': 'Réponse enregistrée.'})
+                messages.success(request, 'Réponse enregistrée.')
                 return redirect('read_message', pk=pk)
             if is_ajax(request):
                 return JsonResponse({'success': False, 'errors': reply_form.errors}, status=400)
