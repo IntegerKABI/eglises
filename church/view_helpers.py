@@ -22,11 +22,34 @@ from .background_jobs import enqueue_invite_email_job
 from .limits import enforce_limits_for_model
 from .membership_policy import get_pending_invitations_for_user
 from .models import Church, ChurchInvitation, ChurchMembership, Notification
+from .rate_limits import (
+    build_login_rate_limit_rules,
+    build_rate_limit_message,
+    reset_rate_limits,
+    consume_rate_limits,
+)
 from .tenancy import get_accessible_churches, get_membership, get_selected_church
 
 
 class TenantLoginView(LoginView):
     template_name = "registration/login.html"
+
+    def post(self, request, *args, **kwargs):
+        """Apply login throttling before attempting authentication."""
+        username = (request.POST.get("username") or "").strip()
+        self._login_rate_limit_rules = build_login_rate_limit_rules(request, username)
+        throttle_result = consume_rate_limits(self._login_rate_limit_rules)
+        if throttle_result.limited:
+            form = self.get_form()
+            form.add_error(None, build_rate_limit_message(throttle_result.retry_after_seconds))
+            return self.form_invalid(form)
+        return super().post(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        """Clear login throttle buckets after a successful authentication."""
+        if hasattr(self, "_login_rate_limit_rules"):
+            reset_rate_limits(self._login_rate_limit_rules)
+        return super().form_valid(form)
 
     def get_success_url(self):
         redirect_to = self.get_redirect_url()

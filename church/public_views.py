@@ -24,6 +24,12 @@ from .limits import enforce_limits_for_model
 from .membership_policy import get_pending_invitations_for_user, validate_single_church_membership
 from .models import Church, ChurchInvitation, ChurchMembership, ContactMessage, Page, filter_public_queryset
 from .notifications import notify_church_admins, notify_message_recipients, notify_user
+from .rate_limits import (
+    build_contact_rate_limit_rules,
+    build_invite_accept_rate_limit_rules,
+    build_rate_limit_message,
+    consume_rate_limits,
+)
 from .tenancy import get_accessible_churches
 from .view_helpers import _get_choice_param, _get_public_church, _get_text_param, _has_pending_invitations, _mark_invite_notifications_read, _parse_bool_param, _querystring_without_page, is_ajax
 
@@ -158,6 +164,15 @@ def church_contact(request, church_slug):
     church = _get_public_church(request, church_slug)
 
     if request.method == 'POST':
+        throttle_result = consume_rate_limits(
+            build_contact_rate_limit_rules(request, church, request.POST.get("sender_email"))
+        )
+        if throttle_result.limited:
+            message = build_rate_limit_message(throttle_result.retry_after_seconds)
+            if is_ajax(request):
+                return JsonResponse({'success': False, 'message': message}, status=429)
+            messages.error(request, message)
+            return redirect('church_contact', church_slug=church_slug)
         form = ContactForm(request.POST)
         if form.is_valid():
             message = form.save(commit=False)
@@ -204,6 +219,15 @@ def accept_invite(request, token):
         if request.user.is_authenticated:
             return redirect('pending_invitations')
         return redirect('home')
+
+    if request.method == 'POST':
+        identity = request.user.email if request.user.is_authenticated else invite.email
+        throttle_result = consume_rate_limits(
+            build_invite_accept_rate_limit_rules(request, invite, identity)
+        )
+        if throttle_result.limited:
+            messages.error(request, build_rate_limit_message(throttle_result.retry_after_seconds))
+            return redirect('accept_invite', token=invite.token)
 
     if not request.user.is_authenticated:
         form = InviteSignupForm(request.POST or None, email=invite.email)

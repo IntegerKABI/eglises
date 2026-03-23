@@ -52,6 +52,11 @@ from .permissions import (
     get_capabilities_for_user,
     require_capability,
 )
+from .rate_limits import (
+    build_invite_send_rate_limit_rules,
+    build_rate_limit_message,
+    consume_rate_limits,
+)
 from .public_views import (
     accept_invite,
     church_contact,
@@ -743,6 +748,15 @@ def invite_user(request):
         return redirect('select_church')
 
     if request.method == 'POST':
+        throttle_result = consume_rate_limits(
+            build_invite_send_rate_limit_rules(request, request.user, f"church:{church.pk}")
+        )
+        if throttle_result.limited:
+            message = build_rate_limit_message(throttle_result.retry_after_seconds)
+            if is_ajax(request):
+                return JsonResponse({'success': False, 'message': message}, status=429)
+            messages.error(request, message)
+            return redirect('manage_users')
         form = ChurchInvitationForm(request.POST, church=church, invited_by=request.user)
         if form.is_valid():
             with transaction.atomic():
@@ -836,6 +850,12 @@ def resend_invite(request, pk):
         return redirect('select_church')
     invite = get_object_or_404(ChurchInvitation, pk=pk, church=church)
     if request.method == 'POST' and invite.status == ChurchInvitation.Status.PENDING:
+        throttle_result = consume_rate_limits(
+            build_invite_send_rate_limit_rules(request, request.user, f"church:{church.pk}")
+        )
+        if throttle_result.limited:
+            messages.error(request, build_rate_limit_message(throttle_result.retry_after_seconds))
+            return redirect('manage_users')
         with transaction.atomic():
             invite.expires_at = timezone.now() + timedelta(days=7)
             invite.save(update_fields=['expires_at'])

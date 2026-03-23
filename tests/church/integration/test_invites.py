@@ -192,3 +192,61 @@ class InvitationIntegrationTests(SaaSTestCase):
         self.assertTrue(ChurchMembership.objects.filter(user=self.invited_user, church=self.church, is_active=True).exists())
         self.assertFalse(Notification.objects.filter(recipient=self.invited_user, is_read=False).exists())
 
+    @override_settings(
+        RATE_LIMITS={
+            "invite_send_ip": {"limit": 1, "window": 60},
+            "invite_send_actor": {"limit": 1, "window": 60},
+        }
+    )
+    def test_invite_user_is_rate_limited(self):
+        self.client.defaults["REMOTE_ADDR"] = "10.0.0.12"
+
+        first_response = self.client.post(
+            reverse("invite_user"),
+            {
+                "email": "first-invite@example.com",
+                "role": ChurchMembership.Role.STAFF,
+            },
+        )
+        second_response = self.client.post(
+            reverse("invite_user"),
+            {
+                "email": "second-invite@example.com",
+                "role": ChurchMembership.Role.STAFF,
+            },
+            follow=True,
+        )
+
+        self.assertRedirects(first_response, reverse("manage_users"))
+        self.assertContains(second_response, "Trop de tentatives")
+        self.assertEqual(ChurchInvitation.objects.filter(church=self.church).count(), 1)
+
+    @override_settings(
+        RATE_LIMITS={
+            "invite_accept_ip": {"limit": 1, "window": 60},
+            "invite_accept_identity": {"limit": 1, "window": 60},
+        }
+    )
+    def test_accept_invite_is_rate_limited_before_signup_submission(self):
+        self.client.logout()
+        self.client.defaults["REMOTE_ADDR"] = "10.0.0.13"
+        invite = self.create_invitation(
+            self.church,
+            self.invited_user.email,
+            invited_by=self.admin,
+        )
+
+        first_response = self.client.post(
+            reverse("accept_invite", args=[invite.token]),
+            {"username": "invalid-signup"},
+        )
+        second_response = self.client.post(
+            reverse("accept_invite", args=[invite.token]),
+            {"username": "invalid-signup"},
+            follow=True,
+        )
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertContains(second_response, "Trop de tentatives")
+        self.assertEqual(invite.status, ChurchInvitation.Status.PENDING)
+

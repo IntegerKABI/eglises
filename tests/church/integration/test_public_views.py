@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -144,3 +145,38 @@ class PublicViewIntegrationTests(SaaSTestCase):
         self.assertEqual(response.json()["success"], True)
         self.assertTrue(ContactMessage.objects.filter(church=church, sender_email="ajax@example.com").exists())
         self.assertEqual(Notification.objects.filter(church=church, recipient=secretary).count(), 1)
+
+    @override_settings(
+        RATE_LIMITS={
+            "contact_ip": {"limit": 1, "window": 60},
+            "contact_email": {"limit": 1, "window": 60},
+        }
+    )
+    def test_public_contact_submission_is_rate_limited(self):
+        church = self.create_church(name="Limited Contact Church")
+        self.client.defaults["REMOTE_ADDR"] = "10.0.0.11"
+
+        first_response = self.client.post(
+            reverse("church_contact", args=[church.slug]),
+            {
+                "sender_name": "Premier visiteur",
+                "sender_email": "limited@example.com",
+                "subject": "Question",
+                "message": "Premier message.",
+            },
+        )
+        second_response = self.client.post(
+            reverse("church_contact", args=[church.slug]),
+            {
+                "sender_name": "Deuxieme visiteur",
+                "sender_email": "limited@example.com",
+                "subject": "Question",
+                "message": "Deuxieme message.",
+            },
+            follow=True,
+        )
+
+        self.assertRedirects(first_response, reverse("church_contact", args=[church.slug]))
+        self.assertEqual(ContactMessage.objects.filter(church=church).count(), 1)
+        self.assertContains(second_response, "Trop de tentatives")
+        self.assertEqual(ContactMessage.objects.filter(church=church).count(), 1)

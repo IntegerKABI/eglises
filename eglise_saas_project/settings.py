@@ -197,5 +197,16 @@ EMAIL_USE_SSL = _env_bool('EMAIL_USE_SSL', default=False)
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 BACKGROUND_JOBS_EAGER = _env_bool('BACKGROUND_JOBS_EAGER', default=False)
 
+RATE_LIMITS = {
+    'login_ip': {'limit': 10, 'window': 900},
+    'login_account': {'limit': 5, 'window': 900},
+    'contact_ip': {'limit': 5, 'window': 900},
+    'contact_email': {'limit': 3, 'window': 900},
+    'invite_accept_ip': {'limit': 10, 'window': 1800},
+    'invite_accept_identity': {'limit': 5, 'window': 1800},
+    'invite_send_ip': {'limit': 20, 'window': 3600},
+    'invite_send_actor': {'limit': 10, 'window': 3600},
+}
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.User'

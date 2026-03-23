@@ -23,6 +23,11 @@ from .limits import get_plan_usage
 from .models import AuditLog, Church, ChurchMembership, Notification
 from .notifications import notify_user
 from .permissions import CAP_MANAGE_SITE_SETTINGS, require_capability
+from .rate_limits import (
+    build_invite_send_rate_limit_rules,
+    build_rate_limit_message,
+    consume_rate_limits,
+)
 from .view_helpers import (
     _enqueue_invite_email_delivery,
     _querystring_without_page,
@@ -197,6 +202,25 @@ def superadmin_church_detail(request, pk):
 def superadmin_church_create(request):
     if request.method == 'POST':
         form = SuperAdminChurchCreateForm(request.POST, request.FILES)
+        if request.POST.get("admin_assignment_mode") == "existing":
+            throttle_result = consume_rate_limits(
+                build_invite_send_rate_limit_rules(request, request.user, "platform")
+            )
+            if throttle_result.limited:
+                message = build_rate_limit_message(throttle_result.retry_after_seconds)
+                form.add_error(None, message)
+                if is_ajax(request):
+                    return JsonResponse({'success': False, 'message': message, 'errors': form.errors}, status=429)
+                return render(
+                    request,
+                    'admin_dashboard/superadmin/church_form.html',
+                    {
+                        'church': getattr(request, 'current_church', None),
+                        'form': form,
+                        'title': "Creer une eglise",
+                        'mode': 'create',
+                    },
+                )
         if form.is_valid():
             church = form.save(invited_by=request.user)
             invitation = getattr(form, 'created_invitation', None)
