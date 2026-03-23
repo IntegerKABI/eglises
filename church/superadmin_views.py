@@ -7,6 +7,7 @@ from django.db.models import Count, Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 
 from .forms import (
     SuperAdminChurchCreateForm,
@@ -14,8 +15,8 @@ from .forms import (
     SuperAdminChurchStatusForm,
     SuperAdminChurchUpdateForm,
 )
-from .limits import get_plan_usage
-from .models import AuditLog, Church, ChurchMembership
+from .limits import get_plan_usage, get_plan_usage_for_churches
+from .models import AuditLog, Church, ChurchInvitation, ChurchMembership
 from .permissions import CAP_MANAGE_SITE_SETTINGS, require_capability
 from .rate_limits import (
     build_invite_send_rate_limit_rules,
@@ -52,7 +53,24 @@ def _superadmin_church_queryset():
                     memberships__is_active=True,
                 ),
                 distinct=True,
-            )
+            ),
+            usage_members_count=Count('members', distinct=True),
+            usage_events_count=Count('events', distinct=True),
+            usage_sermons_count=Count('sermons', distinct=True),
+            usage_pages_count=Count('pages', distinct=True),
+            usage_users_count=Count(
+                'memberships',
+                filter=Q(memberships__is_active=True),
+                distinct=True,
+            ),
+            usage_pending_invitations_count=Count(
+                'invitations',
+                filter=Q(
+                    invitations__status=ChurchInvitation.Status.PENDING,
+                    invitations__expires_at__gt=timezone.now(),
+                ),
+                distinct=True,
+            ),
         )
         .order_by('name', 'id')
     )
@@ -134,11 +152,12 @@ def superadmin_church_list(request):
 
     paginator = Paginator(churches, 12)
     page_obj = paginator.get_page(request.GET.get('page'))
+    usage_by_church = get_plan_usage_for_churches(page_obj.object_list)
 
     tenant_cards = [
         {
             'church': church,
-            'usage': get_plan_usage(church),
+            'usage': usage_by_church[church.pk],
         }
         for church in page_obj.object_list
     ]

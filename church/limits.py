@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.utils import timezone
@@ -21,31 +22,37 @@ COUNT_RESOURCE_CONFIG = {
     "members": {
         "model": Member,
         "label": "membres",
+        "annotation": "usage_members_count",
         "queryset": lambda church: Member.objects.filter(church=church),
     },
     "events": {
         "model": Event,
         "label": "evenements",
+        "annotation": "usage_events_count",
         "queryset": lambda church: Event.objects.filter(church=church),
     },
     "sermons": {
         "model": Sermon,
         "label": "predications",
+        "annotation": "usage_sermons_count",
         "queryset": lambda church: Sermon.objects.filter(church=church),
     },
     "pages": {
         "model": Page,
         "label": "pages",
+        "annotation": "usage_pages_count",
         "queryset": lambda church: Page.objects.filter(church=church),
     },
     "users": {
         "model": ChurchMembership,
         "label": "utilisateurs",
+        "annotation": "usage_users_count",
         "queryset": lambda church: ChurchMembership.objects.filter(church=church, is_active=True),
     },
     "pending_invitations": {
         "model": ChurchInvitation,
         "label": "invitations en attente",
+        "annotation": "usage_pending_invitations_count",
         "queryset": lambda church: ChurchInvitation.objects.filter(
             church=church,
             status=ChurchInvitation.Status.PENDING,
@@ -53,6 +60,9 @@ COUNT_RESOURCE_CONFIG = {
         ),
     },
 }
+
+PLAN_USAGE_CACHE_KEY_TEMPLATE = "church:plan-usage:{church_id}:v1"
+PLAN_USAGE_CACHE_TIMEOUT = 300
 
 RETENTION_RESOURCE_CONFIG = {
     "message_retention_days": {
@@ -95,16 +105,72 @@ def get_storage_usage_mb(church):
 
 def get_resource_count(church, resource):
     config = COUNT_RESOURCE_CONFIG[resource]
+    annotation_name = config.get("annotation")
+    if annotation_name and hasattr(church, annotation_name):
+        return getattr(church, annotation_name)
     return config["queryset"](church).count()
 
 
-def get_plan_usage(church):
+def _build_plan_usage(church):
+    """Build the tenant usage snapshot from database state."""
     usage = {
         resource: get_resource_count(church, resource)
         for resource in COUNT_RESOURCE_CONFIG
     }
     usage["storage_mb"] = get_storage_usage_mb(church)
     return usage
+
+
+def get_plan_usage_cache_key(church_id):
+    """Return the cache key used for a tenant usage snapshot."""
+    return PLAN_USAGE_CACHE_KEY_TEMPLATE.format(church_id=church_id)
+
+
+def invalidate_plan_usage_cache(church_id):
+    """Invalidate the cached plan usage snapshot for a tenant."""
+    cache.delete(get_plan_usage_cache_key(church_id))
+
+
+def get_plan_usage(church, *, use_cache=True):
+    """Return the tenant usage snapshot, optionally using the cache."""
+    if not use_cache:
+        return _build_plan_usage(church)
+
+    cache_key = get_plan_usage_cache_key(church.pk)
+    cached_usage = cache.get(cache_key)
+    if cached_usage is not None:
+        return cached_usage
+
+    usage = _build_plan_usage(church)
+    cache.set(cache_key, usage, timeout=PLAN_USAGE_CACHE_TIMEOUT)
+    return usage
+
+
+def get_plan_usage_for_churches(churches):
+    """Return usage snapshots for a sequence of churches keyed by church id."""
+    church_list = list(churches)
+    if not church_list:
+        return {}
+
+    cache_keys = {
+        get_plan_usage_cache_key(church.pk): church.pk
+        for church in church_list
+    }
+    cached_values = cache.get_many(cache_keys.keys())
+    usage_by_church = {
+        church_id: cached_values[cache_key]
+        for cache_key, church_id in cache_keys.items()
+        if cache_key in cached_values
+    }
+
+    for church in church_list:
+        if church.pk in usage_by_church:
+            continue
+        usage = _build_plan_usage(church)
+        usage_by_church[church.pk] = usage
+        cache.set(get_plan_usage_cache_key(church.pk), usage, timeout=PLAN_USAGE_CACHE_TIMEOUT)
+
+    return usage_by_church
 
 
 def _raise_limit_error(message):

@@ -242,6 +242,23 @@ class SuperAdminChurchManagementIntegrationTests(SaaSTestCase):
         self.assertContains(response, "Filtre Active")
         self.assertNotContains(response, "Filtre Archivee")
 
+    def test_superadmin_tenant_list_exposes_optimized_usage_snapshot(self):
+        self.client.force_login(self.superuser)
+        church = self.create_church(name="Usage Snapshot Church")
+        admin = self.create_user(username="usage-admin", email="usage-admin@example.com")
+        self.add_membership(admin, church, role=ChurchMembership.Role.ADMIN)
+        self.create_member(church)
+        self.create_event(church)
+        self.create_invitation(church, "usage-pending@example.com")
+
+        response = self.client.get(reverse("superadmin_church_list"))
+
+        self.assertEqual(response.status_code, 200)
+        tenant_card = next(card for card in response.context["tenant_cards"] if card["church"].pk == church.pk)
+        self.assertEqual(tenant_card["usage"]["members"], 1)
+        self.assertEqual(tenant_card["usage"]["events"], 1)
+        self.assertEqual(tenant_card["usage"]["pending_invitations"], 1)
+
     def test_superadmin_switch_church_sets_session_context(self):
         self.client.force_login(self.superuser)
         church = self.create_church(name="Support Church", status=Church.Status.SUSPENDED)
