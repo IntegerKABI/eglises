@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
+from .cache import bump_site_cache_version
 from .membership_policy import validate_single_church_membership
 from .model_helpers import (
     CHURCH_PLAN_LIMITS,
@@ -435,6 +436,7 @@ class SiteSettings(models.Model):
         self.pk = 1
         super().save(*args, **kwargs)
         cache.delete(SITE_SETTINGS_CACHE_KEY)
+        bump_site_cache_version()
 
     @classmethod
     def get(cls):

@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from church.cache import get_church_cache_version
 
 from church.models import (
     Church,
@@ -122,6 +123,19 @@ class ChurchModelTests(SaaSTestCase):
         settings_obj.save()
 
         self.assertNotEqual(cache.get("site_settings:singleton:v1"), "stale")
+
+    def test_site_settings_save_bumps_public_cache_versions(self):
+        cache.clear()
+        church = self.create_church()
+        initial_home_version = get_church_cache_version()
+        initial_church_version = get_church_cache_version(church.slug)
+
+        settings_obj = SiteSettings.get()
+        settings_obj.site_name = "Plateforme test"
+        settings_obj.save()
+
+        self.assertNotEqual(get_church_cache_version(), initial_home_version)
+        self.assertNotEqual(get_church_cache_version(church.slug), initial_church_version)
 
     def test_existing_church_cannot_be_activated_without_an_active_admin(self):
         church = self.create_church(name="Draft Church", status=Church.Status.DRAFT)
