@@ -238,7 +238,6 @@ def superadmin_church_create(request):
 
             _schedule_safe_after_commit(after_commit)
 
-            email_error = False
             success_message = "Eglise creee avec son premier administrateur."
             if invitation is not None:
                 notify_user(
@@ -249,15 +248,8 @@ def superadmin_church_create(request):
                     body=f"Vous avez ete invite a administrer {church.name}.",
                     link=reverse('accept_invite', args=[invitation.token]),
                 )
-                try:
-                    _send_invite_email(request, invitation)
-                except Exception:
-                    logger.error("Failed to send invite email", exc_info=True)
-                    email_error = True
-                    messages.error(
-                        request,
-                        "Eglise creee, mais l'email d'invitation n'a pas pu etre envoye.",
-                    )
+                invite_url = request.build_absolute_uri(reverse('accept_invite', args=[invitation.token]))
+                _schedule_safe_after_commit(lambda: _send_invite_email(invite_url, invitation))
                 success_message = "Eglise creee et invitation admin envoyee."
 
             if is_ajax(request):

@@ -775,18 +775,11 @@ def invite_user(request):
                     body=f"Invitation pour {church.name} ({invite.get_role_display()}).",
                     link=reverse('accept_invite', args=[invite.token]),
                 )
-            email_error = False
-            try:
-                _send_invite_email(request, invite)
-            except Exception:
-                logger.error("Failed to send invite email", exc_info=True)
-                email_error = True
-                messages.error(request, "Invitation cr??e, mais l'email n'a pas pu ?tre envoy?.")
+            invite_url = request.build_absolute_uri(reverse('accept_invite', args=[invite.token]))
+            _schedule_safe_after_commit(lambda: _send_invite_email(invite_url, invite))
             if is_ajax(request):
-                message = "Invitation envoy?e." if not email_error else "Invitation cr??e, email non envoy?."
-                return JsonResponse({'success': True, 'message': message, 'redirect': reverse('manage_users')})
-            if not email_error:
-                messages.success(request, "Invitation envoy?e.")
+                return JsonResponse({'success': True, 'message': "Invitation envoy?e.", 'redirect': reverse('manage_users')})
+            messages.success(request, "Invitation envoy?e.")
             return redirect('manage_users')
         if is_ajax(request):
             return JsonResponse({'success': False, 'errors': form.errors}, status=400)
@@ -855,20 +848,17 @@ def resend_invite(request, pk):
             )
         except Exception:
             logger.error("Failed to log invite_resend action", exc_info=True)
-        try:
-            _send_invite_email(request, invite)
-            notify_church_admins(
-                church,
-                category="invite",
-                title="Invitation renvoy?e",
-                body=f"{invite.email} - {invite.get_role_display()}",
-                link=reverse('manage_users'),
-                exclude=request.user,
-            )
-            messages.success(request, "Invitation renvoy?e.")
-        except Exception:
-            logger.error("Failed to resend invite email", exc_info=True)
-            messages.error(request, "Impossible d'envoyer l'email pour le moment.")
+        invite_url = request.build_absolute_uri(reverse('accept_invite', args=[invite.token]))
+        _schedule_safe_after_commit(lambda: _send_invite_email(invite_url, invite))
+        notify_church_admins(
+            church,
+            category="invite",
+            title="Invitation renvoy?e",
+            body=f"{invite.email} - {invite.get_role_display()}",
+            link=reverse('manage_users'),
+            exclude=request.user,
+        )
+        messages.success(request, "Invitation renvoy?e.")
     return redirect('manage_users')
 
 

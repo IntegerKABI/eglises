@@ -118,8 +118,7 @@ def _build_invite_url(request, invite):
     return request.build_absolute_uri(reverse('accept_invite', args=[invite.token]))
 
 
-def _send_invite_email(request, invite):
-    invite_url = _build_invite_url(request, invite)
+def _send_invite_email(invite_url, invite):
     subject = f"Invitation à rejoindre {invite.church.name}"
     message = (
         f"Bonjour,\n\n"
@@ -152,11 +151,19 @@ def _has_pending_invitations(user):
 
 
 def _schedule_safe_after_commit(callback):
-    def wrapped():
+    import threading
+    from django.db import connection
+
+    def threaded_callback():
         try:
             callback()
         except Exception:
             logger.error("Failed to execute after-commit callback", exc_info=True)
+        finally:
+            connection.close()
+
+    def wrapped():
+        threading.Thread(target=threaded_callback, daemon=True).start()
 
     transaction.on_commit(wrapped)
 
