@@ -1,5 +1,5 @@
 /* =================================================================
-   APP.JS — Skeleton loading + AJAX forms
+   APP.JS - Skeleton loading and AJAX forms
    ================================================================= */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 /* ===== SKELETON MANAGEMENT ===== */
 function initSkeleton() {
-    // Petit délai pour l'effet visuel du skeleton
+    // Add a short delay for the skeleton transition
     setTimeout(() => {
         document.querySelectorAll('.skeleton-container').forEach(el => {
             el.classList.add('skeleton-hidden');
@@ -62,14 +62,14 @@ function handleAjaxSubmit(e) {
     const submitBtn = form.querySelector('button[type="submit"]');
     const formCard = form.closest('.card-body') || form;
 
-    // État loading
+    // Enter the loading state
     if (submitBtn) {
         submitBtn.classList.add('btn-loading');
         submitBtn.innerHTML = `<span class="btn-text">${submitBtn.innerHTML}</span>`;
     }
     formCard.classList.add('form-loading');
 
-    // Nettoyer les erreurs précédentes
+    // Clear previous validation feedback
     form.querySelectorAll('.invalid-feedback, .ajax-error').forEach(el => el.remove());
     form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
 
@@ -89,13 +89,13 @@ function handleAjaxSubmit(e) {
             if (data.redirect) {
                 setTimeout(() => { window.location.href = data.redirect; }, 600);
             }
-            // Réinitialiser le formulaire si pas de redirection (ex: contact)
+            // Reset the form when no redirect is requested, such as the contact form
             if (!data.redirect && form.dataset.ajaxReset !== 'false') {
                 form.reset();
             }
         } else {
             showToast(data.message || 'Veuillez corriger les erreurs.', 'error');
-            // Afficher les erreurs de champ
+            // Render field-level validation errors
             if (data.errors) {
                 displayFormErrors(form, data.errors);
             }

@@ -82,9 +82,9 @@
     </div>
 </div>
 
-<!-- Contenu réel -->
+<!-- Rendered content -->
 <div class="page-content">
-    <!-- Hero de l'église -->
+    <!-- Church hero section -->
     <div class="position-relative text-white" style="min-height: 400px; background: linear-gradient(135deg, {{ church.primary_color }}, {{ church.secondary_color }});">
         {% if church.cover_image %}
         <div class="position-absolute top-0 start-0 w-100 h-100" style="background: url('{{ church.cover_image.url }}') center/cover; opacity: 0.3;"></div>
@@ -106,7 +106,7 @@
     </div>
 
     <div class="container py-5">
-        <!-- Horaires des cultes -->
+        <!-- Service times section -->
         {% if church.service_times %}
         <div class="row mb-5">
             <div class="col-lg-8 mx-auto">
@@ -120,7 +120,7 @@
         </div>
         {% endif %}
 
-        <!-- Événements à venir -->
+        <!-- Upcoming events section -->
         {% if upcoming_events %}
         <section class="mb-5">
             <div class="d-flex justify-content-between align-items-center mb-4">
@@ -148,7 +148,7 @@
         </section>
         {% endif %}
 
-        <!-- Dernières prédications -->
+        <!-- Latest sermons section -->
         {% if latest_sermons %}
         <section class="mb-5">
             <div class="d-flex justify-content-between align-items-center mb-4">
@@ -180,7 +180,7 @@
         </section>
         {% endif %}
 
-        <!-- Infos de contact -->
+        <!-- Contact details section -->
         <section>
             <div class="row">
                 <div class="col-lg-6">
