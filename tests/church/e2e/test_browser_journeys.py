@@ -56,63 +56,63 @@ class BrowserJourneyTests(StaticLiveServerTestCase):
             cls._playwright.stop()
         super().tearDownClass()
 
-    @classmethod
-    def setUpTestData(cls):
+    def setUp(self):
+        super().setUp()
         user_model = get_user_model()
-        cls.superadmin = user_model.objects.create_superuser(
+        self.superadmin = user_model.objects.create_superuser(
             username="superadmin",
             email="superadmin@example.com",
-            password=cls.password,
+            password=self.password,
         )
-        cls.admin_user = user_model.objects.create_user(
+        self.admin_user = user_model.objects.create_user(
             username="tenantadmin",
             email="tenantadmin@example.com",
-            password=cls.password,
+            password=self.password,
             first_name="Andre",
             last_name="Kasongo",
         )
-        cls.invited_user = user_model.objects.create_user(
+        self.invited_user = user_model.objects.create_user(
             username="inviteduser",
             email="invited@example.com",
-            password=cls.password,
+            password=self.password,
         )
-        cls.declining_user = user_model.objects.create_user(
+        self.declining_user = user_model.objects.create_user(
             username="declineuser",
             email="decline@example.com",
-            password=cls.password,
+            password=self.password,
         )
-        cls.secretary_user = user_model.objects.create_user(
+        self.secretary_user = user_model.objects.create_user(
             username="secretary",
             email="secretary@example.com",
-            password=cls.password,
+            password=self.password,
         )
 
-        cls.primary_church = Church.objects.create(
+        self.primary_church = Church.objects.create(
             name="Communaute de la Grace",
             city="Kinshasa",
             status=Church.Status.ACTIVE,
         )
-        cls.secondary_church = Church.objects.create(
+        self.secondary_church = Church.objects.create(
             name="Assemblee de l'Espoir",
             city="Lubumbashi",
             status=Church.Status.ACTIVE,
         )
 
         ChurchMembership.objects.create(
-            user=cls.admin_user,
-            church=cls.primary_church,
+            user=self.admin_user,
+            church=self.primary_church,
             role=ChurchMembership.Role.ADMIN,
             is_active=True,
         )
         ChurchMembership.objects.create(
-            user=cls.secretary_user,
-            church=cls.primary_church,
+            user=self.secretary_user,
+            church=self.primary_church,
             role=ChurchMembership.Role.SECRETARY,
             is_active=True,
         )
 
         Event.objects.create(
-            church=cls.primary_church,
+            church=self.primary_church,
             title="Veille de priere",
             event_date=date.today() + timedelta(days=3),
             location="Temple central",
@@ -121,56 +121,56 @@ class BrowserJourneyTests(StaticLiveServerTestCase):
         )
         for index in range(12):
             Event.objects.create(
-                church=cls.primary_church,
+                church=self.primary_church,
                 title=f"Evenement public {index + 1}",
                 event_date=date.today() + timedelta(days=index + 1),
                 visibility="public",
                 is_active=True,
             )
         Sermon.objects.create(
-            church=cls.primary_church,
+            church=self.primary_church,
             title="La foi qui persiste",
             preacher="Pasteur Andre",
             sermon_date=date.today(),
             visibility="public",
             is_active=True,
         )
-        cls.public_page = Page.objects.create(
-            church=cls.primary_church,
+        self.public_page = Page.objects.create(
+            church=self.primary_church,
             title="A propos",
             content="Bienvenue dans notre communaute.",
             visibility="public",
             is_active=True,
             is_in_menu=True,
         )
-        cls.contact_message = ContactMessage.objects.create(
-            church=cls.primary_church,
+        self.contact_message = ContactMessage.objects.create(
+            church=self.primary_church,
             sender_name="Visiteur",
             sender_email="visitor@example.com",
             subject="Demande de priere",
             message="Merci de prier pour ma famille.",
             status=ContactMessage.Status.NEW,
         )
-        cls.notification = Notification.objects.create(
-            church=cls.primary_church,
-            recipient=cls.admin_user,
+        self.notification = Notification.objects.create(
+            church=self.primary_church,
+            recipient=self.admin_user,
             category=Notification.Category.EVENT,
             title="Nouvel evenement",
             body="Un evenement a ete programme.",
             link=reverse("manage_events"),
             is_read=False,
         )
-        cls.accept_invitation = ChurchInvitation.objects.create(
-            church=cls.primary_church,
-            email=cls.invited_user.email,
+        self.accept_invitation = ChurchInvitation.objects.create(
+            church=self.primary_church,
+            email=self.invited_user.email,
             role=ChurchMembership.Role.STAFF,
-            invited_by=cls.admin_user,
+            invited_by=self.admin_user,
         )
-        cls.decline_invitation = ChurchInvitation.objects.create(
-            church=cls.primary_church,
-            email=cls.declining_user.email,
+        self.decline_invitation = ChurchInvitation.objects.create(
+            church=self.primary_church,
+            email=self.declining_user.email,
             role=ChurchMembership.Role.STAFF,
-            invited_by=cls.admin_user,
+            invited_by=self.admin_user,
         )
 
     def new_page(self):
