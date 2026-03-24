@@ -1,10 +1,13 @@
-from datetime import timedelta
+﻿from datetime import timedelta
+from io import StringIO
 
+from django.core import mail
+from django.core.management import call_command
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from church.models import ChurchMembership, ContactMessage, Notification
+from church.models import BackgroundJob, ChurchMembership, ContactMessage, Notification
 from tests.factories import SaaSTestCase
 
 
@@ -106,6 +109,11 @@ class PublicViewIntegrationTests(SaaSTestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        DEFAULT_FROM_EMAIL="tests@example.com",
+        BACKGROUND_JOBS_EAGER=False,
+    )
     def test_public_contact_submission_notifies_secretary_only_by_default(self):
         church = self.create_church(name="Contact Church")
         admin = self.create_user(username="contact-admin")
@@ -129,7 +137,18 @@ class PublicViewIntegrationTests(SaaSTestCase):
         self.assertTrue(ContactMessage.objects.filter(church=church, sender_email="visiteur@example.com").exists())
         recipients = set(Notification.objects.filter(church=church).values_list("recipient_id", flat=True))
         self.assertEqual(recipients, {secretary.pk})
+        self.assertEqual(BackgroundJob.objects.count(), 1)
 
+        call_command("process_background_jobs", stdout=StringIO())
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [secretary.email])
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        DEFAULT_FROM_EMAIL="tests@example.com",
+        BACKGROUND_JOBS_EAGER=False,
+    )
     def test_public_contact_submission_falls_back_to_admins_without_secretary(self):
         church = self.create_church(name="Fallback Contact Church")
         admin = self.create_user(username="fallback-admin")
@@ -151,7 +170,18 @@ class PublicViewIntegrationTests(SaaSTestCase):
         self.assertTrue(ContactMessage.objects.filter(church=church, sender_email="visiteur@example.com").exists())
         recipients = set(Notification.objects.filter(church=church).values_list("recipient_id", flat=True))
         self.assertEqual(recipients, {admin.pk})
+        self.assertEqual(BackgroundJob.objects.count(), 1)
 
+        call_command("process_background_jobs", stdout=StringIO())
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [admin.email])
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        DEFAULT_FROM_EMAIL="tests@example.com",
+        BACKGROUND_JOBS_EAGER=False,
+    )
     def test_public_contact_submission_escalates_to_admin_for_urgent_messages(self):
         church = self.create_church(name="Urgent Contact Church")
         admin = self.create_user(username="urgent-admin")
@@ -173,7 +203,31 @@ class PublicViewIntegrationTests(SaaSTestCase):
         self.assertTrue(ContactMessage.objects.filter(church=church, sender_email="urgent@example.com").exists())
         recipients = set(Notification.objects.filter(church=church).values_list("recipient_id", flat=True))
         self.assertEqual(recipients, {admin.pk, secretary.pk})
+        self.assertEqual(BackgroundJob.objects.filter(job_type=BackgroundJob.JobType.SEND_CONTACT_EMAIL).count(), 2)
 
+        call_command("process_background_jobs", stdout=StringIO())
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [secretary.email])
+
+        delayed_job = BackgroundJob.objects.get(
+            job_type=BackgroundJob.JobType.SEND_CONTACT_EMAIL,
+            status=BackgroundJob.Status.PENDING,
+        )
+        self.assertGreater(delayed_job.available_at, timezone.now())
+        delayed_job.available_at = timezone.now() - timedelta(seconds=1)
+        delayed_job.save(update_fields=["available_at"])
+
+        call_command("process_background_jobs", stdout=StringIO())
+
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual({message.to[0] for message in mail.outbox}, {admin.email, secretary.email})
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        DEFAULT_FROM_EMAIL="tests@example.com",
+        BACKGROUND_JOBS_EAGER=False,
+    )
     def test_public_contact_submission_returns_json_for_ajax(self):
         church = self.create_church(name="Ajax Contact Church")
         secretary = self.create_user(username="ajax-secretary")
@@ -230,4 +284,7 @@ class PublicViewIntegrationTests(SaaSTestCase):
         self.assertEqual(ContactMessage.objects.filter(church=church).count(), 1)
         self.assertContains(second_response, "Trop de tentatives")
         self.assertEqual(ContactMessage.objects.filter(church=church).count(), 1)
+
+
+
 

@@ -199,6 +199,7 @@ class BackgroundJob(models.Model):
 
     class JobType(models.TextChoices):
         SEND_INVITE_EMAIL = "send_invite_email", "Envoi email invitation"
+        SEND_CONTACT_EMAIL = "send_contact_email", "Envoi email contact"
 
     class Status(models.TextChoices):
         PENDING = "pending", "En attente"

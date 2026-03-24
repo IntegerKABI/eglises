@@ -6,6 +6,7 @@ from church.notifications import (
     notify_message_recipients,
     notify_user_role_change,
     recipients_for_capability,
+    resolve_contact_recipient_groups,
 )
 from tests.factories import SaaSTestCase
 
@@ -76,6 +77,30 @@ class NotificationServiceTests(SaaSTestCase):
 
         recipients = set(Notification.objects.values_list("recipient_id", flat=True))
         self.assertEqual(recipients, {self.admin.pk, self.secretary.pk})
+
+    def test_resolve_contact_recipient_groups_separates_primary_and_escalation_recipients(self):
+        primary_recipients, escalation_recipients = resolve_contact_recipient_groups(
+            self.church,
+            "Nouveau message recu",
+            body="Visiteur - Urgent",
+            source_text="Nous avons une urgence familiale.",
+        )
+
+        self.assertEqual([user.pk for user in primary_recipients], [self.secretary.pk])
+        self.assertEqual([user.pk for user in escalation_recipients], [self.admin.pk])
+
+    def test_resolve_contact_recipient_groups_falls_back_to_admins_without_secretary(self):
+        ChurchMembership.objects.filter(user=self.secretary, church=self.church).delete()
+
+        primary_recipients, escalation_recipients = resolve_contact_recipient_groups(
+            self.church,
+            "Nouveau message recu",
+            body="Visiteur - Demande de priere",
+            source_text="Merci de me recontacter.",
+        )
+
+        self.assertEqual([user.pk for user in primary_recipients], [self.admin.pk])
+        self.assertEqual(escalation_recipients, [])
 
     def test_notify_event_recipients_targets_event_capable_roles(self):
         notify_event_recipients(self.church, Notification.Category.EVENT, "Event notice")

@@ -1,7 +1,9 @@
 """Public-facing views and invitation flows."""
 
+from datetime import timedelta
 import logging
 
+from django.conf import settings
 from django.contrib import messages
 
 logger = logging.getLogger(__name__)
@@ -9,6 +11,7 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -18,11 +21,17 @@ from django.utils import timezone
 from .cache import cache_public_view, get_church_cache_version
 
 from .audit import log_audit
+from .background_jobs import enqueue_contact_email_job
 from .forms import ContactForm, InviteSignupForm
 from .invitation_services import accept_invitation
 from .membership_policy import get_pending_invitations_for_user, validate_single_church_membership
 from .models import Church, ChurchInvitation, ContactMessage, Page, filter_public_queryset
-from .notifications import notify_church_admins, notify_contact_recipients, notify_user
+from .notifications import (
+    notify_church_admins,
+    notify_contact_recipients,
+    notify_user,
+    resolve_contact_recipient_groups,
+)
 from .rate_limits import (
     build_contact_rate_limit_rules,
     build_invite_accept_rate_limit_rules,
@@ -176,15 +185,36 @@ def church_contact(request, church_slug):
         if form.is_valid():
             message = form.save(commit=False)
             message.church = church
-            message.save()
-            notify_contact_recipients(
-                church,
-                category="message",
-                title="Nouveau message reçu",
-                body=f"{message.sender_name} - {message.subject or 'Sans sujet'}",
-                link=reverse('read_message', args=[message.pk]),
-                source_text=message.message,
-            )
+            with transaction.atomic():
+                message.save()
+                primary_recipients, escalation_recipients = resolve_contact_recipient_groups(
+                    church,
+                    title="Nouveau message reçu",
+                    body=f"{message.sender_name} - {message.subject or 'Sans sujet'}",
+                    source_text=message.message,
+                )
+                notify_contact_recipients(
+                    church,
+                    category="message",
+                    title="Nouveau message reçu",
+                    body=f"{message.sender_name} - {message.subject or 'Sans sujet'}",
+                    link=reverse('read_message', args=[message.pk]),
+                    source_text=message.message,
+                )
+                enqueue_contact_email_job(
+                    message,
+                    primary_recipients,
+                    request.build_absolute_uri(reverse('read_message', args=[message.pk])),
+                )
+                if escalation_recipients:
+                    enqueue_contact_email_job(
+                        message,
+                        escalation_recipients,
+                        request.build_absolute_uri(reverse('read_message', args=[message.pk])),
+                        available_at=timezone.now() + timedelta(
+                            seconds=getattr(settings, "CONTACT_EMAIL_ESCALATION_DELAY_SECONDS", 5)
+                        ),
+                    )
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': 'Votre message a été envoyé avec succès !'})
             messages.success(request, 'Votre message a été envoyé avec succès !')

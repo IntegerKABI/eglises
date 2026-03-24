@@ -77,8 +77,8 @@ def _is_urgent_contact_message(*parts):
     )
 
 
-def notify_contact_recipients(church, category, title, body="", link="", source_text="", exclude=None):
-    """Notify the primary contact recipients for an inbound public message."""
+def resolve_contact_recipient_groups(church, title, body="", source_text=""):
+    """Return the primary and escalation recipients for a public contact message."""
     secretaries = [
         membership.user
         for membership in _membership_queryset(church).filter(role=ChurchMembership.Role.SECRETARY)
@@ -88,14 +88,23 @@ def notify_contact_recipients(church, category, title, body="", link="", source_
         for membership in _membership_queryset(church).filter(role=ChurchMembership.Role.ADMIN)
     ]
     urgent = _is_urgent_contact_message(title, body, source_text)
+    primary_recipients = secretaries if secretaries else admins
+    escalation_recipients = list(dict.fromkeys(admins)) if secretaries and urgent else []
+    return primary_recipients, escalation_recipients
 
-    if secretaries:
-        notify_users(secretaries, church, category, title, body, link, exclude=exclude)
-        if urgent:
-            notify_users(admins, church, category, title, body, link, exclude=exclude)
-        return
 
-    notify_users(admins, church, category, title, body, link, exclude=exclude)
+def notify_contact_recipients(church, category, title, body="", link="", source_text="", exclude=None):
+    """Notify the primary contact recipients for an inbound public message."""
+    primary_recipients, escalation_recipients = resolve_contact_recipient_groups(
+        church,
+        title,
+        body=body,
+        source_text=source_text,
+    )
+    recipients = list(dict.fromkeys([*primary_recipients, *escalation_recipients]))
+
+    notify_users(recipients, church, category, title, body, link, exclude=exclude)
+    return recipients
 
 
 def notify_event_recipients(church, category, title, body="", link="", exclude=None):

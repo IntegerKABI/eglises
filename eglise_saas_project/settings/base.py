@@ -211,6 +211,7 @@ EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS", default=True)
 EMAIL_USE_SSL = _env_bool("EMAIL_USE_SSL", default=False)
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
 BACKGROUND_JOBS_EAGER = _env_bool("BACKGROUND_JOBS_EAGER", default=False)
+CONTACT_EMAIL_ESCALATION_DELAY_SECONDS = _env_int("CONTACT_EMAIL_ESCALATION_DELAY_SECONDS", 60)
 
 RATE_LIMITS = {
     "login_ip": {"limit": 10, "window": 900},
