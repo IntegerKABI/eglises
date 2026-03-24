@@ -1,18 +1,32 @@
 # Testing Guide
 
-## Use the project virtual environment
+## Required Python interpreter
 
-Activate the project environment before running any Django or Playwright command.
+Always run Django, pytest-style test commands, and Playwright commands from the project virtual environment.
+
+Do not use `py manage.py ...` for this repository. On Windows, `py` can resolve to the global interpreter instead of the project environment, which leads to missing dependencies and inconsistent test results.
+
+Preferred options:
+- Activate the environment and use `python`
+- Or call `env\Scripts\python.exe` directly for one-off commands
+
+### PowerShell activation
 
 ```powershell
 .\env\Scripts\Activate.ps1
 ```
 
-If you do not activate it, `py manage.py ...` may use the global Python interpreter instead of `env\Scripts\python.exe`.
+After activation, every command in this guide should use `python`.
+
+### Direct interpreter usage without activation
+
+```powershell
+env\Scripts\python.exe manage.py test --noinput
+```
 
 ## Local SQLite suite
 
-```bash
+```powershell
 python manage.py test --noinput
 ```
 
@@ -20,7 +34,7 @@ python manage.py test --noinput
 
 1. Start the database service.
 
-```bash
+```powershell
 docker compose up -d postgres
 ```
 
@@ -38,14 +52,14 @@ DATABASE_SSL_REQUIRE=False
 
 3. Run migrations and the test suite.
 
-```bash
+```powershell
 python manage.py migrate
 python manage.py test --noinput
 ```
 
 4. Run the PostgreSQL locking regression on its own when validating concurrency work.
 
-```bash
+```powershell
 python manage.py test tests.church.integration.test_postgres_transactions --noinput
 ```
 
@@ -53,14 +67,14 @@ python manage.py test tests.church.integration.test_postgres_transactions --noin
 
 Install the Python dependency and Chromium once in your environment.
 
-```bash
+```powershell
 pip install -r requirements.txt
 python -m playwright install chromium
 ```
 
 Then run the browser journeys.
 
-```bash
+```powershell
 python manage.py test tests.church.e2e --noinput
 ```
 
