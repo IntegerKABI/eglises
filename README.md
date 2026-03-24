@@ -1,357 +1,329 @@
-# ⛪ Église SaaS — Plateforme web dynamique pour églises
+# Église SaaS
 
-Une plateforme Django où **n'importe quelle église** peut avoir son propre site web en le paramétrant simplement (nom, logo, couleurs, horaires, etc.).
+Plateforme SaaS multi-tenant pour églises, construite avec Django. Chaque église dispose de son espace public, de son tableau de bord, de ses utilisateurs, de ses invitations, de ses contenus, de ses messages, de ses notifications et de ses limites de plan.
 
----
+## Vue d'ensemble
 
-## 📋 Table des matières
+Le projet couvre deux surfaces principales :
 
-1. [Fonctionnalités](#-fonctionnalités)
-2. [Technologies utilisées](#-technologies-utilisées)
-3. [Structure du projet](#-structure-du-projet)
-4. [Installation pas à pas](#-installation-pas-à-pas)
-5. [Lancer l'application](#-lancer-lapplication)
-6. [URLs disponibles](#-urls-disponibles)
-7. [Guide d'utilisation](#-guide-dutilisation)
-8. [Architecture technique](#-architecture-technique)
+- Site public
+  - page d'accueil globale avec la liste des églises actives
+  - site public propre à chaque église
+  - événements, prédications, pages personnalisées et formulaire de contact
+- Espace de gestion
+  - tableau de bord par rôle
+  - gestion des contenus, membres, messages, utilisateurs, invitations, audit et notifications
+  - console superadmin pour la gestion des églises, des plans et du cycle de vie tenant
 
----
+Le modèle métier est centré sur `Church` comme tenant principal. Les accès sont contrôlés par relation utilisateur-église, rôle, statut de l'église et capacités applicatives.
 
-## ✨ Fonctionnalités
+## Stack technique
 
-### Site public (visiteurs)
-- Page d'accueil avec liste de toutes les églises
-- Page dédiée par église avec couleurs et logo personnalisés
-- Événements à venir
-- Prédications (avec liens vidéo/audio)
-- Pages dynamiques (À propos, Ministères, etc.)
-- Formulaire de contact
+- Python 3.12+
+- Django 5.1+
+- PostgreSQL comme base principale
+- SQLite comme fallback local si aucune configuration PostgreSQL n'est fournie
+- Bootstrap 5
+- django-crispy-forms + crispy-bootstrap5
+- WhiteNoise pour les fichiers statiques
+- Cache Redis optionnel via `CACHE_URL`
+- Jobs d'arrière-plan durables en base de données pour les traitements critiques comme l'envoi d'invitations
 
-### Dashboard administrateur (pasteur/admin)
-- Tableau de bord avec statistiques (membres, événements, messages)
-- Gestion complète des événements (créer, modifier, supprimer)
-- Gestion des prédications
-- Gestion des membres
-- Lecture des messages de contact
-- Paramétrage de l'église (nom, logo, couleurs, horaires, réseaux sociaux)
+## Architecture actuelle
 
----
+### Applications
 
-## 🛠 Technologies utilisées
+- `accounts`
+  - modèle utilisateur personnalisé
+  - configuration Django admin liée aux comptes
+- `church`
+  - domaine métier principal
+  - gestion multi-tenant, contenus, membres, messages, notifications, audit, quotas, invitations et console superadmin
 
-| Technologie | Version | Rôle |
-|---|---|---|
-| **Python** | 3.12.2 | Langage de programmation |
-| **Django** | 6.0.3 | Framework web (gère les routes, la BDD, l'authentification, l'admin) |
-| **PostgreSQL** | 16+ recommandé | Base de données principale pour le développement sérieux et la production |
-| **SQLite** | intégré | Base de secours locale si aucune configuration PostgreSQL n'est fournie |
-| **Bootstrap 5** | 5.3 | Framework CSS pour un design responsive et professionnel |
-| **Bootstrap Icons** | 1.11 | Icônes vectorielles |
-| **Pillow** | 12.1.1 | Bibliothèque Python pour le traitement des images (upload logo/photos) |
-| **django-crispy-forms** | 2.6 | Rendu élégant des formulaires HTML avec Bootstrap |
-| **crispy-bootstrap5** | 2026.3 | Template pack Bootstrap 5 pour crispy-forms |
+### Configuration du projet
 
----
+Le projet utilise désormais un package de settings par environnement :
 
-## 📁 Structure du projet
+- [base.py](c:/Projects/Personal/2026/Full/eglises/eglise_saas_project/settings/base.py)
+- [development.py](c:/Projects/Personal/2026/Full/eglises/eglise_saas_project/settings/development.py)
+- [test.py](c:/Projects/Personal/2026/Full/eglises/eglise_saas_project/settings/test.py)
+- [production.py](c:/Projects/Personal/2026/Full/eglises/eglise_saas_project/settings/production.py)
 
-```
-eglise_saas/
-│
-├── manage.py                    # Commande principale Django (lancer le serveur, migrations, etc.)
-├── requirements.txt             # Liste des dépendances Python
-├── db.sqlite3                   # Base de données SQLite (créée automatiquement)
-│
-├── eglise_saas_project/         # Configuration du projet Django
-│   ├── settings.py              # Paramètres globaux (langue FR, fuseau horaire, apps, BDD)
-│   ├── urls.py                  # Routes principales (admin, login, logout + inclusion de church/)
-│   ├── wsgi.py                  # Point d'entrée pour serveurs de production
-│   └── asgi.py                  # Point d'entrée pour serveurs asynchrones
-│
-├── church/                      # Application principale
-│   ├── models.py                # 6 modèles = 6 tables en BDD (Church, Event, Sermon, etc.)
-│   ├── views.py                 # Logique de chaque page (20+ vues)
-│   ├── urls.py                  # Routes de l'app (URLs publiques + dashboard)
-│   ├── forms.py                 # Formulaires auto-générés depuis les modèles
-│   ├── admin.py                 # Configuration de l'admin Django
-│   ├── context_processors.py    # Injecte l'église courante dans tous les templates
-│   └── management/commands/
-│       └── setup_demo.py        # Commande pour créer les données de démonstration
-│
-├── templates/                   # Fichiers HTML
-│   ├── base.html                # Template maître (navbar, footer, couleurs dynamiques)
-│   ├── registration/
-│   │   └── login.html           # Page de connexion
-│   ├── church/                  # Pages publiques
-│   │   ├── home.html            # Accueil global (liste des églises)
-│   │   ├── church_home.html     # Accueil d'une église
-│   │   ├── events.html          # Liste des événements
-│   │   ├── sermons.html         # Liste des prédications
-│   │   ├── contact.html         # Formulaire de contact
-│   │   └── custom_page.html     # Pages dynamiques personnalisées
-│   └── admin_dashboard/         # Dashboard administrateur
-│       ├── base_dashboard.html  # Layout avec sidebar
-│       ├── dashboard.html       # Vue d'ensemble + statistiques
-│       ├── church_settings.html # Paramètres de l'église
-│       ├── manage_events.html   # Liste des événements (CRUD)
-│       ├── event_form.html      # Formulaire ajout/modification événement
-│       ├── manage_sermons.html  # Liste des prédications (CRUD)
-│       ├── sermon_form.html     # Formulaire ajout/modification prédication
-│       ├── manage_members.html  # Liste des membres (CRUD)
-│       ├── member_form.html     # Formulaire ajout/modification membre
-│       ├── manage_messages.html # Liste des messages reçus
-│       └── read_message.html    # Lecture d'un message
-│
-├── static/                      # Fichiers statiques (CSS, JS, images du site)
-│   ├── css/
-│   ├── js/
-│   └── images/
-│
-├── media/                       # Fichiers uploadés par les utilisateurs (logos, photos)
-│
-└── venv/                        # Environnement virtuel Python (non versionné)
-```
+Entrées principales :
 
----
+- [manage.py](c:/Projects/Personal/2026/Full/eglises/manage.py)
+- [urls.py](c:/Projects/Personal/2026/Full/eglises/eglise_saas_project/urls.py)
+- [wsgi.py](c:/Projects/Personal/2026/Full/eglises/eglise_saas_project/wsgi.py)
+- [asgi.py](c:/Projects/Personal/2026/Full/eglises/eglise_saas_project/asgi.py)
 
-## 🚀 Installation pas à pas
+### Domaine `church`
 
-### Pré-requis
+Les modèles sont séparés par responsabilité :
 
-- **Python 3.12.2** installé → vérifier avec `python --version`
-- **pip** installé → vérifier avec `pip --version`
-- **PostgreSQL** installé localement si vous voulez sortir de SQLite
-- **pgAdmin 4** est facultatif : c'est un client d'administration, pas le serveur PostgreSQL
+- [tenant_models.py](c:/Projects/Personal/2026/Full/eglises/church/tenant_models.py)
+  - `Church`
+  - `ChurchMembership`
+  - `ChurchInvitation`
+  - `SiteSettings`
+- [content_models.py](c:/Projects/Personal/2026/Full/eglises/church/content_models.py)
+  - `Event`
+  - `Sermon`
+  - `Page`
+  - `Member`
+- [communication_models.py](c:/Projects/Personal/2026/Full/eglises/church/communication_models.py)
+  - `ContactMessage`
+  - `ContactMessageReply`
+  - `Notification`
+  - `AuditLog`
+  - `BackgroundJob`
 
-### Étape 1 — Cloner ou télécharger le projet
+Les vues sont séparées par surface fonctionnelle :
 
-```bash
-cd c:\xampp\htdocs
-git clone <url-du-repo> eglise_saas
-cd eglise_saas
-```
+- [views.py](c:/Projects/Personal/2026/Full/eglises/church/views.py)
+  - vues dashboard historiques et point d'entrée principal
+- [public_views.py](c:/Projects/Personal/2026/Full/eglises/church/public_views.py)
+  - site public, invitation, sélection d'église
+- [notification_views.py](c:/Projects/Personal/2026/Full/eglises/church/notification_views.py)
+  - notifications, audit, paramètres plateforme
+- [superadmin_views.py](c:/Projects/Personal/2026/Full/eglises/church/superadmin_views.py)
+  - console superadmin
+- [view_helpers.py](c:/Projects/Personal/2026/Full/eglises/church/view_helpers.py)
+  - helpers partagés de présentation
 
-Ou si le dossier existe déjà, simplement :
-```bash
-cd c:\xampp\htdocs\eglise_saas
-```
+La logique métier transactionnelle a été extraite dans des services applicatifs :
 
-### Étape 2 — Créer l'environnement virtuel
+- [invitation_services.py](c:/Projects/Personal/2026/Full/eglises/church/invitation_services.py)
+- [membership_services.py](c:/Projects/Personal/2026/Full/eglises/church/membership_services.py)
+- [message_services.py](c:/Projects/Personal/2026/Full/eglises/church/message_services.py)
+- [superadmin_services.py](c:/Projects/Personal/2026/Full/eglises/church/superadmin_services.py)
 
-L'environnement virtuel isole les dépendances du projet pour ne pas polluer le Python global.
+Autres composants importants :
 
-```bash
-python -m venv venv
-```
+- [permissions.py](c:/Projects/Personal/2026/Full/eglises/church/permissions.py)
+  - matrice de capacités et décorateurs d'autorisation
+- [limits.py](c:/Projects/Personal/2026/Full/eglises/church/limits.py)
+  - calculs de quota, rétention et usage par tenant
+- [membership_policy.py](c:/Projects/Personal/2026/Full/eglises/church/membership_policy.py)
+  - règles de rattachement utilisateur-église
+- [background_jobs.py](c:/Projects/Personal/2026/Full/eglises/church/background_jobs.py)
+  - enregistrement et traitement des jobs durables
+- [rate_limits.py](c:/Projects/Personal/2026/Full/eglises/church/rate_limits.py)
+  - limitation d'abus pour login, contact, invitations
+- [middleware.py](c:/Projects/Personal/2026/Full/eglises/church/middleware.py)
+  - résolution de l'église courante
+- [context_processors.py](c:/Projects/Personal/2026/Full/eglises/church/context_processors.py)
+  - injection du contexte tenant et capacités dans les templates
 
-### Étape 3 — Activer l'environnement virtuel
+## Rôles et accès
 
-**Windows (PowerShell) :**
-```powershell
-.\venv\Scripts\Activate.ps1
-```
+### Superadmin
 
-**Windows (CMD) :**
-```cmd
-venv\Scripts\activate.bat
-```
+- gère les paramètres plateforme
+- voit tous les audits
+- change de contexte d'église
+- gère les églises depuis la console plateforme
+- attribue les plans et limites
+- change le statut tenant : brouillon, active, suspendue, archivée
 
-**Linux / Mac :**
-```bash
-source venv/bin/activate
-```
+### Admin d'église
 
-> Quand l'environnement est activé, vous voyez `(venv)` au début de la ligne de commande.
+- gère les paramètres de l'église
+- gère utilisateurs, memberships et invitations
+- gère contenus, membres, messages et audit d'église
+- voit l'usage du plan et les limites de son église
 
-### Étape 4 — Installer les dépendances
+### Staff
 
-```bash
-pip install -r requirements.txt
-```
+- gère événements, prédications, pages et membres
+- ne gère ni utilisateurs, ni audit, ni paramètres plateforme
 
-Cela installe :
-- `django` — le framework web
-- `pillow` — traitement d'images pour les uploads
-- `django-crispy-forms` + `crispy-bootstrap5` — formulaires Bootstrap élégants
+### Secrétaire
 
-### Étape 5 — Configurer la base de données
+- gère messages, membres, événements et prédications
+- ne gère ni pages, ni utilisateurs, ni audit, ni paramètres plateforme
 
-Le projet utilise PostgreSQL si les variables `DATABASE_URL` ou `POSTGRES_*` sont définies dans `.env`.
-Sinon, il retombe automatiquement sur SQLite (`db.sqlite3`).
+## Base de données
 
-#### Option A — PostgreSQL local via Docker
+### Mode recommandé
 
-1. Installer Docker Desktop.
-2. Renseigner `.env` :
+Le projet est PostgreSQL-first. En pratique :
+
+- si `DATABASE_URL` est défini, Django l'utilise
+- sinon, si `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` et `POSTGRES_HOST` sont définis, Django utilise PostgreSQL
+- sinon, Django retombe sur SQLite
+
+### Variables de base
+
+Exemple PostgreSQL local :
 
 ```env
+SECRET_KEY=change-me
+DEBUG=True
 POSTGRES_DB=eglise_saas
 POSTGRES_USER=eglise_user
-POSTGRES_PASSWORD=votre_mot_de_passe
+POSTGRES_PASSWORD=eglise-password
 POSTGRES_HOST=127.0.0.1
 POSTGRES_PORT=5432
 DATABASE_CONN_MAX_AGE=600
 DATABASE_SSL_REQUIRE=False
 ```
 
-3. Lancer PostgreSQL :
+Ou avec une URL unique :
 
-```bash
+```env
+DATABASE_URL=postgresql://eglise_user:eglise-password@127.0.0.1:5432/eglise_saas
+```
+
+## Installation locale
+
+### 1. Créer et activer l'environnement
+
+```powershell
+python -m venv env
+.\env\Scripts\Activate.ps1
+```
+
+### 2. Installer les dépendances
+
+```powershell
+pip install -r requirements.txt
+```
+
+### 3. Configurer `.env`
+
+Créer un fichier `.env` à la racine en s'appuyant sur [`.env.example`](c:/Projects/Personal/2026/Full/eglises/.env.example).
+
+### 4. Démarrer PostgreSQL via Docker
+
+```powershell
 docker compose up -d postgres
 ```
 
-4. Vérifier que le conteneur est prêt :
+### 5. Appliquer les migrations
 
-```bash
-docker compose ps
-```
-
-5. Appliquer les migrations :
-
-```bash
-python manage.py makemigrations
+```powershell
 python manage.py migrate
 ```
 
-Vous pouvez aussi utiliser une seule variable `DATABASE_URL` :
-
-```env
-DATABASE_URL=postgresql://eglise_user:votre_mot_de_passe@127.0.0.1:5432/eglise_saas
-```
-
-> Si vous utilisez `DATABASE_URL`, elle prend priorité sur `POSTGRES_*`.
-
-#### Option B — SQLite (fallback)
-
-Laissez les variables PostgreSQL vides dans `.env`. Django utilisera automatiquement `db.sqlite3`.
-
-### Étape 6 — Charger les données de démonstration
-
-Cette commande crée un administrateur et une église de test :
-
-```bash
-python manage.py setup_demo
-```
-
-Elle crée :
-- **Utilisateur admin** : `admin` / `admin123`
-- **Église de démo** : "Église de la Grâce" (slug: `demo`)
-- 3 événements, 3 prédications, 5 membres, 2 pages
-
----
-
-## ▶ Lancer l'application
-
-### 1. Activer l'environnement virtuel (si pas déjà fait)
+### 6. Lancer le serveur
 
 ```powershell
-cd c:\xampp\htdocs\eglise_saas
-.\venv\Scripts\Activate.ps1
-```
-
-### 2. Lancer le serveur de développement
-
-```bash
 python manage.py runserver
 ```
 
-### 3. Ouvrir dans le navigateur
+## Jobs d'arrière-plan
 
-Le terminal affiche :
-```
-Starting development server at http://127.0.0.1:8000/
-```
+Les invitations par email et certains traitements critiques passent par des jobs durables stockés en base.
 
-Ouvrez cette adresse dans votre navigateur.
+Lancer le worker local :
 
-### Arrêter le serveur
-
-Appuyez sur `Ctrl + C` dans le terminal.
-
----
-
-## 🔗 URLs disponibles
-
-| URL | Description | Accès |
-|---|---|---|
-| `http://localhost:8000/` | Page d'accueil — liste des églises | Public |
-| `http://localhost:8000/eglise/demo/` | Site de l'église de démo | Public |
-| `http://localhost:8000/eglise/demo/evenements/` | Événements de l'église | Public |
-| `http://localhost:8000/eglise/demo/predications/` | Prédications de l'église | Public |
-| `http://localhost:8000/eglise/demo/contact/` | Formulaire de contact | Public |
-| `http://localhost:8000/eglise/demo/page/a-propos/` | Page "À propos" | Public |
-| `http://localhost:8000/login/` | Page de connexion | Public |
-| `http://localhost:8000/dashboard/` | Tableau de bord admin | Connecté |
-| `http://localhost:8000/dashboard/parametres/` | Paramétrer l'église | Connecté |
-| `http://localhost:8000/dashboard/evenements/` | Gérer les événements | Connecté |
-| `http://localhost:8000/dashboard/predications/` | Gérer les prédications | Connecté |
-| `http://localhost:8000/dashboard/membres/` | Gérer les membres | Connecté |
-| `http://localhost:8000/dashboard/messages/` | Voir les messages reçus | Connecté |
-| `http://localhost:8000/admin/` | Admin Django (gestion avancée) | Super-admin |
-
----
-
-## 📖 Guide d'utilisation
-
-### Se connecter
-1. Aller sur `http://localhost:8000/login/`
-2. Entrer : **admin** / **admin123**
-3. Vous êtes redirigé vers le dashboard
-
-### Paramétrer une église
-1. Dashboard → **Paramètres**
-2. Modifier le nom, logo, couleurs, horaires, réseaux sociaux
-3. Cliquer sur **Enregistrer**
-4. Le site public se met à jour automatiquement avec les nouvelles couleurs et infos
-
-### Ajouter une nouvelle église
-1. Aller sur `http://localhost:8000/admin/`
-2. Cliquer sur **Églises** → **Ajouter**
-3. Remplir le formulaire (le slug est généré automatiquement)
-4. Assigner un utilisateur comme administrateur
-5. La nouvelle église est accessible sur `/eglise/<slug>/`
-
-### Créer un nouvel administrateur
-```bash
-python manage.py createsuperuser
-```
-Puis dans l'admin Django, associer cet utilisateur à une église.
-
----
-
-## 🏗 Architecture technique
-
-### Concept multi-église (SaaS)
-
-Chaque église a un **slug unique** (ex: `demo`, `vie-nouvelle`). Ce slug est utilisé dans toutes les URLs :
-```
-/eglise/<slug>/              → page d'accueil de l'église
-/eglise/<slug>/evenements/   → ses événements
-/eglise/<slug>/contact/      → son formulaire de contact
+```powershell
+python manage.py process_background_jobs --loop --sleep 5
 ```
 
-Les couleurs, le logo et tout le contenu s'adaptent automatiquement grâce au **context processor** qui injecte l'objet `current_church` dans chaque template.
+Pour un comportement synchrone en environnement local ciblé, `BACKGROUND_JOBS_EAGER` peut être activé par configuration, mais ce n'est pas le mode normal de production.
 
-### Base de données — 6 tables
+## Données de démonstration
 
-| Table | Description | Lien |
-|---|---|---|
-| `Church` | Configuration de chaque église | Table centrale |
-| `Event` | Événements | → appartient à une Church |
-| `Sermon` | Prédications | → appartient à une Church |
-| `Member` | Membres | → appartient à une Church |
-| `Page` | Pages dynamiques | → appartient à une Church |
-| `ContactMessage` | Messages de contact | → appartient à une Church |
+Deux options existent selon le besoin :
 
-### Flux d'une requête
+- [setup_demo.py](c:/Projects/Personal/2026/Full/eglises/church/management/commands/setup_demo.py)
+  - crée un environnement de démonstration minimal
+- [drc_demo_data.json](c:/Projects/Personal/2026/Full/eglises/church/fixtures/drc_demo_data.json)
+  - fixture réaliste en français, orientée RDC
 
-```
-Navigateur → URL → urls.py → views.py → models.py (BDD) → template HTML → Réponse
+Chargement de la fixture :
+
+```powershell
+python manage.py loaddata church/fixtures/drc_demo_data.json
 ```
 
-1. L'utilisateur tape une URL
-2. `urls.py` détermine quelle vue appeler
-3. `views.py` récupère les données depuis la base de données via `models.py`
-4. La vue envoie ces données à un template HTML
-5. Le template génère le HTML final avec Bootstrap 5
-6. La réponse est envoyée au navigateur
+## Tests
+
+Le guide de test détaillé se trouve dans [TESTING.md](c:/Projects/Personal/2026/Full/eglises/TESTING.md).
+
+Règle importante :
+
+- utiliser l'environnement virtuel du projet
+- ne pas utiliser `py manage.py ...` sur Windows pour ce dépôt
+
+Commandes courantes :
+
+```powershell
+.\env\Scripts\Activate.ps1
+python manage.py test --noinput
+python manage.py check
+```
+
+Le projet contient :
+
+- tests unitaires
+- tests d'intégration
+- tests applicatifs
+- tests PostgreSQL ciblés pour les chemins sensibles au verrouillage
+- tests navigateur E2E, avec exécution conditionnelle selon l'environnement local
+
+Le dossier principal est [tests](c:/Projects/Personal/2026/Full/eglises/tests).
+
+## Routes principales
+
+### Public
+
+- `/`
+- `/login/`
+- `/eglise/<slug>/`
+- `/eglise/<slug>/evenements/`
+- `/eglise/<slug>/predications/`
+- `/eglise/<slug>/contact/`
+- `/eglise/<slug>/page/<slug>/`
+- `/invite/<uuid:token>/`
+- `/invitations/`
+
+### Dashboard
+
+- `/dashboard/`
+- `/dashboard/selection/`
+- `/dashboard/parametres/`
+- `/dashboard/evenements/`
+- `/dashboard/predications/`
+- `/dashboard/membres/`
+- `/dashboard/pages/`
+- `/dashboard/messages/`
+- `/dashboard/notifications/`
+- `/dashboard/audit/`
+- `/dashboard/utilisateurs/`
+
+### Plateforme superadmin
+
+- `/dashboard/site/`
+- `/dashboard/platform/churches/`
+- `/dashboard/platform/churches/create/`
+- `/dashboard/platform/churches/<id>/`
+- `/dashboard/platform/churches/<id>/edit/`
+- `/dashboard/platform/churches/<id>/status/`
+- `/dashboard/platform/churches/<id>/plan/`
+
+## Déploiement
+
+Le dépôt contient déjà des fichiers de déploiement :
+
+- [render.yaml](c:/Projects/Personal/2026/Full/eglises/render.yaml)
+  - web service
+  - worker de jobs d'arrière-plan
+- [docker-compose.yml](c:/Projects/Personal/2026/Full/eglises/docker-compose.yml)
+  - PostgreSQL local pour le développement
+
+En production, utiliser PostgreSQL comme base principale et lancer le worker `process_background_jobs` séparément du processus web.
+
+## Points d'attention actuels
+
+Le projet a déjà une base sérieuse pour la production, mais il faut garder en tête :
+
+- PostgreSQL doit rester la base principale pour les workflows sensibles à la concurrence
+- les tests doivent être lancés depuis l'environnement virtuel du projet
+- les messages destinés aux utilisateurs restent en français
+- les commentaires, docstrings et autres éléments internes de code sont en anglais
+
+## Licence
+
+Projet privé.
