@@ -74,6 +74,9 @@ jobs:
       - name: Apply migrations
         run: python manage.py migrate --noinput
 
+      - name: Run browser E2E tests
+        run: python manage.py test tests.church.e2e
+
       - name: Run PostgreSQL locking regression tests
         run: python manage.py test tests.church.integration.test_postgres_transactions
 
@@ -122,3 +125,6 @@ jobs:
 
       - name: Apply migrations
         run: python manage.py migrate --noinput
+
+      - name: Run browser E2E tests
+        run: python manage.py test tests.church.e2e

@@ -79,18 +79,25 @@ def _field_file_size(field_file):
         return 0
 
 
+def _storage_related_items(church, attr_name, model, field_name):
+    prefetched_items = getattr(church, attr_name, None)
+    if prefetched_items is not None:
+        return prefetched_items
+    return model.objects.filter(church=church).only(field_name)
+
+
 def get_storage_usage_bytes(church):
     total = 0
     total += _field_file_size(church.logo)
     total += _field_file_size(church.cover_image)
 
-    for event in Event.objects.filter(church=church).only("image"):
+    for event in _storage_related_items(church, "_prefetched_storage_events", Event, "image"):
         total += _field_file_size(event.image)
-    for sermon in Sermon.objects.filter(church=church).only("image"):
+    for sermon in _storage_related_items(church, "_prefetched_storage_sermons", Sermon, "image"):
         total += _field_file_size(sermon.image)
-    for member in Member.objects.filter(church=church).only("photo"):
+    for member in _storage_related_items(church, "_prefetched_storage_members", Member, "photo"):
         total += _field_file_size(member.photo)
-    for page in Page.objects.filter(church=church).only("image"):
+    for page in _storage_related_items(church, "_prefetched_storage_pages", Page, "image"):
         total += _field_file_size(page.image)
     return total
 

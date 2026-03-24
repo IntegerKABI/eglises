@@ -16,7 +16,7 @@ from .forms import (
     SuperAdminChurchUpdateForm,
 )
 from .limits import get_plan_usage, get_plan_usage_for_churches
-from .models import AuditLog, Church, ChurchInvitation, ChurchMembership
+from .models import AuditLog, Church, ChurchInvitation, ChurchMembership, Event, Member, Page, Sermon
 from .permissions import CAP_MANAGE_SITE_SETTINGS, require_capability
 from .rate_limits import (
     build_invite_send_rate_limit_rules,
@@ -35,15 +35,23 @@ from .view_helpers import (
 )
 
 
-def _superadmin_church_queryset():
+def _superadmin_church_list_queryset():
     admin_memberships = ChurchMembership.objects.filter(
         role=ChurchMembership.Role.ADMIN,
         is_active=True,
     ).select_related('user').order_by('user__first_name', 'user__last_name', 'user__username')
+    storage_events = Event.objects.only('church_id', 'image').order_by('id')
+    storage_sermons = Sermon.objects.only('church_id', 'image').order_by('id')
+    storage_members = Member.objects.only('church_id', 'photo').order_by('id')
+    storage_pages = Page.objects.only('church_id', 'image').order_by('id')
     return (
         Church.objects.all()
         .prefetch_related(
-            Prefetch('memberships', queryset=admin_memberships, to_attr='active_admin_memberships')
+            Prefetch('memberships', queryset=admin_memberships, to_attr='active_admin_memberships'),
+            Prefetch('events', queryset=storage_events, to_attr='_prefetched_storage_events'),
+            Prefetch('sermons', queryset=storage_sermons, to_attr='_prefetched_storage_sermons'),
+            Prefetch('members', queryset=storage_members, to_attr='_prefetched_storage_members'),
+            Prefetch('pages', queryset=storage_pages, to_attr='_prefetched_storage_pages'),
         )
         .annotate(
             active_admin_count=Count(
@@ -73,6 +81,16 @@ def _superadmin_church_queryset():
             ),
         )
         .order_by('name', 'id')
+    )
+
+
+def _superadmin_church_detail_queryset():
+    admin_memberships = ChurchMembership.objects.filter(
+        role=ChurchMembership.Role.ADMIN,
+        is_active=True,
+    ).select_related('user').order_by('user__first_name', 'user__last_name', 'user__username')
+    return Church.objects.all().prefetch_related(
+        Prefetch('memberships', queryset=admin_memberships, to_attr='active_admin_memberships')
     )
 
 
@@ -120,7 +138,7 @@ def _build_effective_limit_rows(church):
 @login_required
 @require_capability(CAP_MANAGE_SITE_SETTINGS)
 def superadmin_church_list(request):
-    churches = _superadmin_church_queryset()
+    churches = _superadmin_church_list_queryset()
 
     query = (request.GET.get('q') or '').strip()
     if query:
@@ -183,7 +201,7 @@ def superadmin_church_list(request):
 @login_required
 @require_capability(CAP_MANAGE_SITE_SETTINGS)
 def superadmin_church_detail(request, pk):
-    church = get_object_or_404(_superadmin_church_queryset(), pk=pk)
+    church = get_object_or_404(_superadmin_church_detail_queryset(), pk=pk)
     tenant_usage = get_plan_usage(church)
     recent_audit_logs = AuditLog.objects.filter(church=church).select_related('actor')[:10]
 

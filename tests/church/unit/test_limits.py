@@ -2,16 +2,20 @@ from datetime import timedelta
 
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.db import connection
+from django.db.models import Prefetch
 from django.utils import timezone
+from django.test.utils import CaptureQueriesContext
 
 from church.limits import (
     enforce_count_limit,
     get_plan_usage,
     get_plan_usage_for_churches,
+    get_storage_usage_bytes,
     get_resource_count,
     get_retention_cutoff,
 )
-from church.models import ChurchMembership
+from church.models import Church, ChurchInvitation, ChurchMembership
 from tests.factories import SaaSTestCase
 
 
@@ -63,6 +67,27 @@ class LimitUnitTests(SaaSTestCase):
         self.assertEqual(usage_by_church[first.pk]["members"], 1)
         self.assertEqual(usage_by_church[first.pk]["events"], 1)
         self.assertEqual(usage_by_church[second.pk]["sermons"], 1)
+
+    def test_get_storage_usage_bytes_uses_prefetched_storage_relations(self):
+        church = self.create_church(name="Storage Prefetch")
+        self.create_event(church)
+        self.create_sermon(church)
+        self.create_member(church)
+        self.create_page(church)
+        ChurchInvitation.objects.create(church=church, email="prefetch@example.com")
+
+        prefetched_church = Church.objects.prefetch_related(
+            Prefetch("events", to_attr="_prefetched_storage_events"),
+            Prefetch("sermons", to_attr="_prefetched_storage_sermons"),
+            Prefetch("members", to_attr="_prefetched_storage_members"),
+            Prefetch("pages", to_attr="_prefetched_storage_pages"),
+        ).get(pk=church.pk)
+
+        with CaptureQueriesContext(connection) as ctx:
+            usage_bytes = get_storage_usage_bytes(prefetched_church)
+
+        self.assertGreaterEqual(usage_bytes, 0)
+        self.assertEqual(len(ctx.captured_queries), 0)
 
     def test_usage_cache_is_invalidated_when_member_changes(self):
         cache.clear()
