@@ -1,5 +1,7 @@
 from datetime import timedelta
 from io import StringIO
+
+from django.core.cache import cache
 from unittest.mock import patch
 
 from django.core import mail
@@ -20,6 +22,7 @@ from tests.factories import SaaSTestCase
 class InvitationIntegrationTests(SaaSTestCase):
     def setUp(self):
         super().setUp()
+        cache.clear()
         self.admin = self.create_user(username="invite-admin", email="invite-admin@example.com")
         self.invited_user = self.create_user(username="invite-target", email="invite-target@example.com")
         self.church = self.create_church(name="Invite Church")
