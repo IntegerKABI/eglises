@@ -1,4 +1,4 @@
-name: Django CI
+name: CI/CD Pipeline
 
 on:
   push:
@@ -8,9 +8,16 @@ jobs:
   test-sqlite:
     runs-on: ubuntu-latest
     env:
+      DJANGO_SETTINGS_MODULE: eglise_saas_project.settings.test
       SECRET_KEY: ci-secret-key
       DEBUG: "False"
       ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+      DATABASE_URL: ""
+      POSTGRES_DB: ""
+      POSTGRES_USER: ""
+      POSTGRES_PASSWORD: ""
+      POSTGRES_HOST: ""
+      POSTGRES_PORT: ""
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -26,10 +33,10 @@ jobs:
           pip install -r requirements.txt
 
       - name: Validate migrations
-        run: python manage.py makemigrations --check --dry-run
+        run: python manage.py makemigrations --check --dry-run --settings=eglise_saas_project.settings.test
 
       - name: Run SQLite test suite
-        run: python manage.py test
+        run: python manage.py test --settings=eglise_saas_project.settings.test
 
   test-postgres:
     runs-on: ubuntu-latest
@@ -48,6 +55,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      DJANGO_SETTINGS_MODULE: eglise_saas_project.settings.test
       SECRET_KEY: ci-secret-key
       DEBUG: "False"
       ALLOWED_HOSTS: localhost,127.0.0.1,testserver
@@ -69,19 +77,19 @@ jobs:
           pip install -r requirements.txt
 
       - name: Validate migrations
-        run: python manage.py makemigrations --check --dry-run
+        run: python manage.py makemigrations --check --dry-run --settings=eglise_saas_project.settings.test
 
       - name: Apply migrations
-        run: python manage.py migrate --noinput
+        run: python manage.py migrate --noinput --settings=eglise_saas_project.settings.test
 
       - name: Run browser E2E tests
-        run: python manage.py test tests.church.e2e
+        run: python manage.py test tests.church.e2e --settings=eglise_saas_project.settings.test
 
       - name: Run PostgreSQL locking regression tests
-        run: python manage.py test tests.church.integration.test_postgres_transactions
+        run: python manage.py test tests.church.integration.test_postgres_transactions --settings=eglise_saas_project.settings.test
 
       - name: Run full PostgreSQL test suite
-        run: python manage.py test
+        run: python manage.py test --settings=eglise_saas_project.settings.test
 
   test-browser:
     runs-on: ubuntu-latest
@@ -100,6 +108,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      DJANGO_SETTINGS_MODULE: eglise_saas_project.settings.test
       SECRET_KEY: ci-secret-key
       DEBUG: "False"
       ALLOWED_HOSTS: localhost,127.0.0.1,testserver
@@ -124,7 +133,7 @@ jobs:
         run: python -m playwright install --with-deps chromium
 
       - name: Apply migrations
-        run: python manage.py migrate --noinput
+        run: python manage.py migrate --noinput --settings=eglise_saas_project.settings.test
 
       - name: Run browser E2E tests
-        run: python manage.py test tests.church.e2e
+        run: python manage.py test tests.church.e2e --settings=eglise_saas_project.settings.test
