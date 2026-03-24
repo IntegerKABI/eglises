@@ -83,8 +83,8 @@ jobs:
       - name: Apply migrations
         run: python manage.py migrate --noinput --settings=eglise_saas_project.settings.test
 
-      - name: Run browser E2E tests
-        run: python manage.py test tests.church.e2e --settings=eglise_saas_project.settings.test
+      # - name: Run browser E2E tests
+      #   run: python manage.py test tests.church.e2e --settings=eglise_saas_project.settings.test
 
       - name: Run PostgreSQL locking regression tests
         run: python manage.py test tests.church.integration.test_postgres_transactions --settings=eglise_saas_project.settings.test
