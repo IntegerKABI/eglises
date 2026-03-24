@@ -115,16 +115,7 @@
                                 <span class="badge bg-warning text-dark">Non lu</span>
                             {% endif %}
                         </td>
-                        <td class="text-end">
-                            {% if not notif.is_read %}
-                            <form method="post" action="{% url 'mark_notification_read' notif.pk %}" class="d-inline">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-check-lg"></i> Marquer lu
-                                </button>
-                            </form>
-                            {% endif %}
-                        </td>
+                        <td class="text-end"></td>
                     </tr>
                     {% empty %}
                     <tr>

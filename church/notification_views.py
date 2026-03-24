@@ -88,29 +88,6 @@ def open_notification(request, pk):
 
 @login_required
 @require_capability(CAP_VIEW_DASHBOARD)
-def mark_notification_read(request, pk):
-    church = _require_church(request)
-    if not church:
-        return redirect('select_church')
-    accessible_churches = list(get_accessible_churches(request.user))
-    notification = get_object_or_404(
-        filter_notifications_for_retention(
-            Notification.objects.filter(
-                recipient=request.user,
-                church__in=accessible_churches,
-            ),
-            accessible_churches,
-        ),
-        pk=pk,
-    )
-    if request.method == 'POST':
-        notification.is_read = True
-        notification.save(update_fields=['is_read'])
-    return redirect('manage_notifications')
-
-
-@login_required
-@require_capability(CAP_VIEW_DASHBOARD)
 def mark_all_notifications_read(request):
     church = _require_church(request)
     if not church:

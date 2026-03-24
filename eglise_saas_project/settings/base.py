@@ -1,6 +1,7 @@
 """Shared Django settings used by all runtime environments."""
 
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
@@ -45,6 +46,14 @@ def _env_list(name, default=None):
     raw_value = os.environ.get(name, "")
     values = [value.strip() for value in raw_value.split(",") if value.strip()]
     return values or list(default or [])
+
+
+def _env_log_level(name, default="INFO"):
+    """Parse and normalize a logging level environment variable."""
+    value = os.environ.get(name, default)
+    normalized = value.strip().upper()
+    allowed_levels = {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
+    return normalized if normalized in allowed_levels else default
 
 
 def _build_database_config():
@@ -212,6 +221,53 @@ RATE_LIMITS = {
     "invite_accept_identity": {"limit": 5, "window": 1800},
     "invite_send_ip": {"limit": 20, "window": 3600},
     "invite_send_actor": {"limit": 10, "window": 3600},
+}
+
+LOG_LEVEL = _env_log_level("LOG_LEVEL", default="DEBUG" if DEBUG else "INFO")
+DJANGO_LOG_LEVEL = _env_log_level("DJANGO_LOG_LEVEL", default="INFO")
+CHURCH_LOG_LEVEL = _env_log_level("CHURCH_LOG_LEVEL", default=LOG_LEVEL)
+BACKGROUND_JOBS_LOG_LEVEL = _env_log_level("BACKGROUND_JOBS_LOG_LEVEL", default=LOG_LEVEL)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "structured": {
+            "format": (
+                "timestamp=%(asctime)s level=%(levelname)s logger=%(name)s "
+                "module=%(module)s function=%(funcName)s line=%(lineno)d message=%(message)s"
+            ),
+            "datefmt": "%Y-%m-%dT%H:%M:%S%z",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "stream": sys.stdout,
+            "formatter": "structured",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": LOG_LEVEL,
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": DJANGO_LOG_LEVEL,
+            "propagate": False,
+        },
+        "church": {
+            "handlers": ["console"],
+            "level": CHURCH_LOG_LEVEL,
+            "propagate": False,
+        },
+        "church.background_jobs": {
+            "handlers": ["console"],
+            "level": BACKGROUND_JOBS_LOG_LEVEL,
+            "propagate": False,
+        },
+    },
 }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

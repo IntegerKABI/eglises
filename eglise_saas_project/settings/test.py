@@ -17,3 +17,10 @@ CACHES = {
         "LOCATION": "eglise-saas-tests",
     }
 }
+
+# Keep expected request noise out of the test runner output.
+LOGGING["loggers"]["django.request"] = {
+    "handlers": ["console"],
+    "level": "CRITICAL",
+    "propagate": False,
+}

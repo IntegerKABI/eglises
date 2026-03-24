@@ -40,3 +40,10 @@ class NotificationApplicationTests(SaaSTestCase):
         self.assertContains(response, "Church one")
         self.assertContains(response, "Church two")
 
+    def test_notification_list_does_not_expose_manual_mark_read_action(self):
+        self.create_notification(self.church, self.admin, title="Unread notification")
+
+        response = self.client.get(reverse("manage_notifications"))
+
+        self.assertNotContains(response, "Marquer lu")
+

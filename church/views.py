@@ -87,7 +87,6 @@ from .notification_views import (
     manage_audit_logs,
     manage_notifications,
     mark_all_notifications_read,
-    mark_notification_read,
     open_notification,
     site_settings,
 )

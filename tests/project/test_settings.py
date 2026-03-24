@@ -13,6 +13,14 @@ class SettingsHelpersTests(SimpleTestCase):
             self.assertTrue(project_settings._env_bool("FEATURE_FLAG"))
             self.assertEqual(project_settings._env_int("COUNT_LIMIT", 0), 15)
 
+    def test_env_log_level_normalizes_known_levels(self):
+        with patch.dict(os.environ, {"APP_LOG_LEVEL": "warning"}, clear=False):
+            self.assertEqual(project_settings._env_log_level("APP_LOG_LEVEL"), "WARNING")
+
+    def test_env_log_level_falls_back_for_invalid_values(self):
+        with patch.dict(os.environ, {"APP_LOG_LEVEL": "verbose"}, clear=False):
+            self.assertEqual(project_settings._env_log_level("APP_LOG_LEVEL", default="INFO"), "INFO")
+
     def test_build_database_config_prefers_database_url(self):
         env = {
             "DATABASE_URL": "postgresql://eglise_user:secret@127.0.0.1:5432/eglise_saas",
@@ -74,3 +82,18 @@ class SettingsHelpersTests(SimpleTestCase):
         self.assertIsNotNone(import_module("eglise_saas_project.settings.development"))
         self.assertIsNotNone(import_module("eglise_saas_project.settings.production"))
         self.assertIsNotNone(import_module("eglise_saas_project.settings.test"))
+
+    def test_logging_configuration_uses_structured_console_output(self):
+        console_handler = project_settings.LOGGING["handlers"]["console"]
+        structured_formatter = project_settings.LOGGING["formatters"]["structured"]
+
+        self.assertEqual(console_handler["formatter"], "structured")
+        self.assertEqual(console_handler["stream"], project_settings.sys.stdout)
+        self.assertIn("timestamp=%(asctime)s", structured_formatter["format"])
+
+    def test_test_profile_silences_django_request_noise(self):
+        test_settings = import_module("eglise_saas_project.settings.test")
+        django_request_logger = test_settings.LOGGING["loggers"]["django.request"]
+
+        self.assertEqual(django_request_logger["level"], "CRITICAL")
+        self.assertFalse(django_request_logger["propagate"])
