@@ -1,3 +1,7 @@
+"""Notification helpers for church workflows."""
+
+from unicodedata import normalize
+
 from .models import ChurchMembership, Notification
 from .permissions import get_capabilities_for_user
 
@@ -51,6 +55,47 @@ def notify_church_admins(church, category, title, body="", link="", exclude=None
 def notify_message_recipients(church, category, title, body="", link="", exclude=None):
     users = recipients_for_capability(church, capability="manage_messages")
     notify_users(users, church, category, title, body, link, exclude=exclude)
+
+
+def _normalize_notification_text(*parts):
+    text = " ".join(part for part in parts if part)
+    normalized = normalize("NFKD", text)
+    return normalized.encode("ascii", "ignore").decode("ascii").lower()
+
+
+def _is_urgent_contact_message(*parts):
+    text = _normalize_notification_text(*parts)
+    return any(
+        keyword in text
+        for keyword in (
+            "urgent",
+            "urgence",
+            "immediat",
+            "important",
+            "asap",
+        )
+    )
+
+
+def notify_contact_recipients(church, category, title, body="", link="", source_text="", exclude=None):
+    """Notify the primary contact recipients for an inbound public message."""
+    secretaries = [
+        membership.user
+        for membership in _membership_queryset(church).filter(role=ChurchMembership.Role.SECRETARY)
+    ]
+    admins = [
+        membership.user
+        for membership in _membership_queryset(church).filter(role=ChurchMembership.Role.ADMIN)
+    ]
+    urgent = _is_urgent_contact_message(title, body, source_text)
+
+    if secretaries:
+        notify_users(secretaries, church, category, title, body, link, exclude=exclude)
+        if urgent:
+            notify_users(admins, church, category, title, body, link, exclude=exclude)
+        return
+
+    notify_users(admins, church, category, title, body, link, exclude=exclude)
 
 
 def notify_event_recipients(church, category, title, body="", link="", exclude=None):

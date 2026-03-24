@@ -22,7 +22,7 @@ from .forms import ContactForm, InviteSignupForm
 from .invitation_services import accept_invitation
 from .membership_policy import get_pending_invitations_for_user, validate_single_church_membership
 from .models import Church, ChurchInvitation, ContactMessage, Page, filter_public_queryset
-from .notifications import notify_church_admins, notify_message_recipients, notify_user
+from .notifications import notify_church_admins, notify_contact_recipients, notify_user
 from .rate_limits import (
     build_contact_rate_limit_rules,
     build_invite_accept_rate_limit_rules,
@@ -177,12 +177,13 @@ def church_contact(request, church_slug):
             message = form.save(commit=False)
             message.church = church
             message.save()
-            notify_message_recipients(
+            notify_contact_recipients(
                 church,
                 category="message",
                 title="Nouveau message reçu",
                 body=f"{message.sender_name} - {message.subject or 'Sans sujet'}",
                 link=reverse('read_message', args=[message.pk]),
+                source_text=message.message,
             )
             if is_ajax(request):
                 return JsonResponse({'success': True, 'message': 'Votre message a été envoyé avec succès !'})

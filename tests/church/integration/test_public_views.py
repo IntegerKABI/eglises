@@ -106,9 +106,13 @@ class PublicViewIntegrationTests(SaaSTestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    def test_public_contact_submission_creates_message_and_notifications(self):
+    def test_public_contact_submission_notifies_secretary_only_by_default(self):
         church = self.create_church(name="Contact Church")
+        admin = self.create_user(username="contact-admin")
+        staff = self.create_user(username="contact-staff")
         secretary = self.create_user(username="secretary-contact")
+        self.add_membership(admin, church, role=ChurchMembership.Role.ADMIN)
+        self.add_membership(staff, church, role=ChurchMembership.Role.STAFF)
         self.add_membership(secretary, church, role=ChurchMembership.Role.SECRETARY)
 
         response = self.client.post(
@@ -123,7 +127,52 @@ class PublicViewIntegrationTests(SaaSTestCase):
 
         self.assertRedirects(response, reverse("church_contact", args=[church.slug]))
         self.assertTrue(ContactMessage.objects.filter(church=church, sender_email="visiteur@example.com").exists())
-        self.assertEqual(Notification.objects.filter(church=church, recipient=secretary).count(), 1)
+        recipients = set(Notification.objects.filter(church=church).values_list("recipient_id", flat=True))
+        self.assertEqual(recipients, {secretary.pk})
+
+    def test_public_contact_submission_falls_back_to_admins_without_secretary(self):
+        church = self.create_church(name="Fallback Contact Church")
+        admin = self.create_user(username="fallback-admin")
+        staff = self.create_user(username="fallback-staff")
+        self.add_membership(admin, church, role=ChurchMembership.Role.ADMIN)
+        self.add_membership(staff, church, role=ChurchMembership.Role.STAFF)
+
+        response = self.client.post(
+            reverse("church_contact", args=[church.slug]),
+            {
+                "sender_name": "Visiteur",
+                "sender_email": "visiteur@example.com",
+                "subject": "Demande de priere",
+                "message": "Merci de prier pour ma famille.",
+            },
+        )
+
+        self.assertRedirects(response, reverse("church_contact", args=[church.slug]))
+        self.assertTrue(ContactMessage.objects.filter(church=church, sender_email="visiteur@example.com").exists())
+        recipients = set(Notification.objects.filter(church=church).values_list("recipient_id", flat=True))
+        self.assertEqual(recipients, {admin.pk})
+
+    def test_public_contact_submission_escalates_to_admin_for_urgent_messages(self):
+        church = self.create_church(name="Urgent Contact Church")
+        admin = self.create_user(username="urgent-admin")
+        secretary = self.create_user(username="urgent-secretary")
+        self.add_membership(admin, church, role=ChurchMembership.Role.ADMIN)
+        self.add_membership(secretary, church, role=ChurchMembership.Role.SECRETARY)
+
+        response = self.client.post(
+            reverse("church_contact", args=[church.slug]),
+            {
+                "sender_name": "Visiteur",
+                "sender_email": "urgent@example.com",
+                "subject": "Urgent",
+                "message": "Nous avons une urgence familiale.",
+            },
+        )
+
+        self.assertRedirects(response, reverse("church_contact", args=[church.slug]))
+        self.assertTrue(ContactMessage.objects.filter(church=church, sender_email="urgent@example.com").exists())
+        recipients = set(Notification.objects.filter(church=church).values_list("recipient_id", flat=True))
+        self.assertEqual(recipients, {admin.pk, secretary.pk})
 
     def test_public_contact_submission_returns_json_for_ajax(self):
         church = self.create_church(name="Ajax Contact Church")
@@ -144,7 +193,8 @@ class PublicViewIntegrationTests(SaaSTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["success"], True)
         self.assertTrue(ContactMessage.objects.filter(church=church, sender_email="ajax@example.com").exists())
-        self.assertEqual(Notification.objects.filter(church=church, recipient=secretary).count(), 1)
+        recipients = set(Notification.objects.filter(church=church).values_list("recipient_id", flat=True))
+        self.assertEqual(recipients, {secretary.pk})
 
     @override_settings(
         RATE_LIMITS={
@@ -180,3 +230,4 @@ class PublicViewIntegrationTests(SaaSTestCase):
         self.assertEqual(ContactMessage.objects.filter(church=church).count(), 1)
         self.assertContains(second_response, "Trop de tentatives")
         self.assertEqual(ContactMessage.objects.filter(church=church).count(), 1)
+

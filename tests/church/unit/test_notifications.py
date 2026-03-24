@@ -1,6 +1,7 @@
 from church.models import ChurchMembership, Notification
 from church.notifications import (
     notify_church_admins,
+    notify_contact_recipients,
     notify_event_recipients,
     notify_message_recipients,
     notify_user_role_change,
@@ -37,6 +38,45 @@ class NotificationServiceTests(SaaSTestCase):
         recipients = set(Notification.objects.values_list("recipient_id", flat=True))
         self.assertEqual(recipients, {self.admin.pk, self.secretary.pk})
 
+    def test_notify_contact_recipients_prefers_secretaries_and_skips_staff(self):
+        notify_contact_recipients(
+            self.church,
+            Notification.Category.MESSAGE,
+            "Nouveau message recu",
+            body="Visiteur - Demande de priere",
+            source_text="Merci de prier pour ma famille.",
+        )
+
+        recipients = set(Notification.objects.values_list("recipient_id", flat=True))
+        self.assertEqual(recipients, {self.secretary.pk})
+
+    def test_notify_contact_recipients_falls_back_to_admins_without_secretary(self):
+        ChurchMembership.objects.filter(user=self.secretary, church=self.church).delete()
+        Notification.objects.all().delete()
+
+        notify_contact_recipients(
+            self.church,
+            Notification.Category.MESSAGE,
+            "Nouveau message recu",
+            body="Visiteur - Demande de priere",
+            source_text="Merci de me recontacter.",
+        )
+
+        recipients = set(Notification.objects.values_list("recipient_id", flat=True))
+        self.assertEqual(recipients, {self.admin.pk})
+
+    def test_notify_contact_recipients_escalates_to_admins_for_urgent_messages(self):
+        notify_contact_recipients(
+            self.church,
+            Notification.Category.MESSAGE,
+            "Nouveau message recu",
+            body="Visiteur - Urgent",
+            source_text="Nous avons une urgence familiale.",
+        )
+
+        recipients = set(Notification.objects.values_list("recipient_id", flat=True))
+        self.assertEqual(recipients, {self.admin.pk, self.secretary.pk})
+
     def test_notify_event_recipients_targets_event_capable_roles(self):
         notify_event_recipients(self.church, Notification.Category.EVENT, "Event notice")
 
@@ -48,4 +88,3 @@ class NotificationServiceTests(SaaSTestCase):
 
         recipients = list(Notification.objects.order_by("recipient_id").values_list("recipient_id", flat=True))
         self.assertEqual(recipients, [self.admin.pk, self.staff.pk])
-
