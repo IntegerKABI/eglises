@@ -1,10 +1,10 @@
 # Église SaaS
 
-Plateforme SaaS multi-tenant pour églises, construite avec Django. Chaque église dispose de son espace public, de son tableau de bord, de ses utilisateurs, de ses invitations, de ses contenus, de ses messages, de ses notifications et de ses limites de plan.
+Plateforme SaaS multi-tenant pour les églises, construite avec Django. Chaque église dispose de son site public, de son espace de gestion, de ses utilisateurs, de ses invitations, de ses contenus, de ses messages, de ses notifications et de ses limites de plan.
 
 ## Vue d'ensemble
 
-Le projet couvre deux surfaces principales :
+Le projet couvre trois surfaces principales :
 
 - Site public
   - page d'accueil globale avec la liste des églises actives
@@ -13,21 +13,21 @@ Le projet couvre deux surfaces principales :
 - Espace de gestion
   - tableau de bord par rôle
   - gestion des contenus, membres, messages, utilisateurs, invitations, audit et notifications
-  - console superadmin pour la gestion des églises, des plans et du cycle de vie tenant
+- Console plateforme
+  - gestion des églises, des plans et du cycle de vie tenant
 
-Le modèle métier est centré sur `Church` comme tenant principal. Les accès sont contrôlés par relation utilisateur-église, rôle, statut de l'église et capacités applicatives.
+Le modèle métier est centré sur `Church` comme tenant principal. Les accès sont contrôlés par la relation utilisateur-église, le rôle, le statut de l’église et les capacités applicatives.
 
 ## Stack technique
 
 - Python 3.12+
 - Django 5.1+
-- PostgreSQL comme base principale
 - PostgreSQL uniquement
 - Bootstrap 5
-- django-crispy-forms + crispy-bootstrap5
+- `django-crispy-forms` + `crispy-bootstrap5`
 - WhiteNoise pour les fichiers statiques
 - Cache Redis optionnel via `CACHE_URL`
-- Jobs d'arrière-plan durables en base de données pour les traitements critiques comme l'envoi d'invitations
+- Jobs d’arrière-plan durables en base de données pour les traitements critiques comme l’envoi d’invitations et d’emails de contact
 
 ## Architecture actuelle
 
@@ -35,6 +35,7 @@ Le modèle métier est centré sur `Church` comme tenant principal. Les accès s
 
 - `accounts`
   - modèle utilisateur personnalisé
+  - vue de connexion tenant
   - configuration Django admin liée aux comptes
 - `church`
   - domaine métier principal
@@ -42,7 +43,7 @@ Le modèle métier est centré sur `Church` comme tenant principal. Les accès s
 
 ### Configuration du projet
 
-Le projet utilise désormais un package de settings par environnement :
+Le projet utilise un package de settings par environnement :
 
 - [base.py](c:/Projects/Personal/2026/Full/eglises/eglise_saas_project/settings/base.py)
 - [development.py](c:/Projects/Personal/2026/Full/eglises/eglise_saas_project/settings/development.py)
@@ -58,19 +59,19 @@ Entrées principales :
 
 ### Domaine `church`
 
-Les modèles sont séparés par responsabilité :
+Le domaine est séparé par responsabilité :
 
-- [tenant_models.py](c:/Projects/Personal/2026/Full/eglises/church/tenant_models.py)
+- [church/models/tenant.py](c:/Projects/Personal/2026/Full/eglises/church/models/tenant.py)
   - `Church`
   - `ChurchMembership`
   - `ChurchInvitation`
   - `SiteSettings`
-- [content_models.py](c:/Projects/Personal/2026/Full/eglises/church/content_models.py)
+- [church/models/content.py](c:/Projects/Personal/2026/Full/eglises/church/models/content.py)
   - `Event`
   - `Sermon`
   - `Page`
   - `Member`
-- [communication_models.py](c:/Projects/Personal/2026/Full/eglises/church/communication_models.py)
+- [church/models/communication.py](c:/Projects/Personal/2026/Full/eglises/church/models/communication.py)
   - `ContactMessage`
   - `ContactMessageReply`
   - `Notification`
@@ -79,40 +80,52 @@ Les modèles sont séparés par responsabilité :
 
 Les vues sont séparées par surface fonctionnelle :
 
-- [views.py](c:/Projects/Personal/2026/Full/eglises/church/views.py)
-  - vues dashboard historiques et point d'entrée principal
-- [public_views.py](c:/Projects/Personal/2026/Full/eglises/church/public_views.py)
-  - site public, invitation, sélection d'église
-- [notification_views.py](c:/Projects/Personal/2026/Full/eglises/church/notification_views.py)
+- [accounts/views.py](c:/Projects/Personal/2026/Full/eglises/accounts/views.py)
+  - authentification tenant
+- [church/views/views.py](c:/Projects/Personal/2026/Full/eglises/church/views/views.py)
+  - vues dashboard historiques et point d’entrée principal
+- [church/views/public.py](c:/Projects/Personal/2026/Full/eglises/church/views/public.py)
+  - site public, invitation, sélection d’église
+- [church/views/notification.py](c:/Projects/Personal/2026/Full/eglises/church/views/notification.py)
   - notifications, audit, paramètres plateforme
-- [superadmin_views.py](c:/Projects/Personal/2026/Full/eglises/church/superadmin_views.py)
+- [church/views/superadmin.py](c:/Projects/Personal/2026/Full/eglises/church/views/superadmin.py)
   - console superadmin
-- [view_helpers.py](c:/Projects/Personal/2026/Full/eglises/church/view_helpers.py)
-  - helpers partagés de présentation
 
 La logique métier transactionnelle a été extraite dans des services applicatifs :
 
-- [invitation_services.py](c:/Projects/Personal/2026/Full/eglises/church/invitation_services.py)
-- [membership_services.py](c:/Projects/Personal/2026/Full/eglises/church/membership_services.py)
-- [message_services.py](c:/Projects/Personal/2026/Full/eglises/church/message_services.py)
-- [superadmin_services.py](c:/Projects/Personal/2026/Full/eglises/church/superadmin_services.py)
+- [church/services/invitation.py](c:/Projects/Personal/2026/Full/eglises/church/services/invitation.py)
+- [church/services/membership.py](c:/Projects/Personal/2026/Full/eglises/church/services/membership.py)
+- [church/services/message.py](c:/Projects/Personal/2026/Full/eglises/church/services/message.py)
+- [church/services/superadmin.py](c:/Projects/Personal/2026/Full/eglises/church/services/superadmin.py)
 
 Autres composants importants :
 
-- [permissions.py](c:/Projects/Personal/2026/Full/eglises/church/permissions.py)
-  - matrice de capacités et décorateurs d'autorisation
-- [limits.py](c:/Projects/Personal/2026/Full/eglises/church/limits.py)
+- [church/helpers/http.py](c:/Projects/Personal/2026/Full/eglises/church/helpers/http.py)
+  - réponses AJAX et parsing des paramètres de requête
+- [church/helpers/form.py](c:/Projects/Personal/2026/Full/eglises/church/helpers/form.py)
+  - orchestration partagée pour les formulaires CRUD
+- [church/helpers/list_view.py](c:/Projects/Personal/2026/Full/eglises/church/helpers/list_view.py)
+  - pagination et contexte de listes
+- [church/helpers/query.py](c:/Projects/Personal/2026/Full/eglises/church/helpers/query.py)
+  - filtres et querysets réutilisables
+- [church/helpers/model.py](c:/Projects/Personal/2026/Full/eglises/church/helpers/model.py)
+  - fonctions partagées liées aux modèles
+- [church/context/church.py](c:/Projects/Personal/2026/Full/eglises/church/context/church.py)
+  - résolution de l’église courante et helpers de contexte
+- [church/context/processors.py](c:/Projects/Personal/2026/Full/eglises/church/context/processors.py)
+  - injection du contexte tenant et des capacités dans les templates
+- [church/permissions.py](c:/Projects/Personal/2026/Full/eglises/church/permissions.py)
+  - matrice de capacités et décorateurs d’autorisation
+- [church/limits.py](c:/Projects/Personal/2026/Full/eglises/church/limits.py)
   - calculs de quota, rétention et usage par tenant
-- [membership_policy.py](c:/Projects/Personal/2026/Full/eglises/church/membership_policy.py)
+- [church/membership_policy.py](c:/Projects/Personal/2026/Full/eglises/church/membership_policy.py)
   - règles de rattachement utilisateur-église
-- [background_jobs.py](c:/Projects/Personal/2026/Full/eglises/church/background_jobs.py)
+- [church/background_jobs.py](c:/Projects/Personal/2026/Full/eglises/church/background_jobs.py)
   - enregistrement et traitement des jobs durables
-- [rate_limits.py](c:/Projects/Personal/2026/Full/eglises/church/rate_limits.py)
-  - limitation d'abus pour login, contact, invitations
-- [middleware.py](c:/Projects/Personal/2026/Full/eglises/church/middleware.py)
-  - résolution de l'église courante
-- [context_processors.py](c:/Projects/Personal/2026/Full/eglises/church/context_processors.py)
-  - injection du contexte tenant et capacités dans les templates
+- [church/rate_limits.py](c:/Projects/Personal/2026/Full/eglises/church/rate_limits.py)
+  - limitation d’abus pour login, contact et invitations
+- [church/middleware.py](c:/Projects/Personal/2026/Full/eglises/church/middleware.py)
+  - résolution de l’église courante
 
 ## Rôles et accès
 
@@ -120,17 +133,17 @@ Autres composants importants :
 
 - gère les paramètres plateforme
 - voit tous les audits
-- change de contexte d'église
+- change de contexte d’église
 - gère les églises depuis la console plateforme
 - attribue les plans et limites
 - change le statut tenant : brouillon, active, suspendue, archivée
 
-### Admin d'église
+### Admin d’église
 
-- gère les paramètres de l'église
+- gère les paramètres de l’église
 - gère utilisateurs, memberships et invitations
-- gère contenus, membres, messages et audit d'église
-- voit l'usage du plan et les limites de son église
+- gère contenus, membres, messages et audit d’église
+- voit l’usage du plan et les limites de son église
 
 ### Staff
 
@@ -148,7 +161,7 @@ Autres composants importants :
 
 Le projet est PostgreSQL uniquement. En pratique :
 
-- si `DATABASE_URL` est défini, Django l'utilise
+- si `DATABASE_URL` est défini, Django l’utilise
 - sinon, si `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` et `POSTGRES_HOST` sont définis, Django utilise PostgreSQL
 - sinon, le chargement de la configuration lève une erreur explicite
 
@@ -176,7 +189,7 @@ DATABASE_URL=postgresql://eglise_user:eglise-password@127.0.0.1:5432/eglise_saas
 
 ## Installation locale
 
-### 1. Créer et activer l'environnement
+### 1. Créer et activer l’environnement
 
 ```powershell
 python -m venv env
@@ -191,7 +204,7 @@ pip install -r requirements.txt
 
 ### 3. Configurer `.env`
 
-Créer un fichier `.env` à la racine en s'appuyant sur [`.env.example`](c:/Projects/Personal/2026/Full/eglises/.env.example).
+Créer un fichier `.env` à la racine en s’appuyant sur [`.env.example`](c:/Projects/Personal/2026/Full/eglises/.env.example).
 
 ### 4. Démarrer PostgreSQL via Docker
 
@@ -211,9 +224,9 @@ python manage.py migrate
 python manage.py runserver
 ```
 
-## Jobs d'arrière-plan
+## Jobs d’arrière-plan
 
-Les invitations par email et certains traitements critiques passent par des jobs durables stockés en base.
+Les invitations par email, les emails de contact et certains traitements critiques passent par des jobs durables stockés en base.
 
 Lancer le worker local :
 
@@ -221,7 +234,7 @@ Lancer le worker local :
 python manage.py process_background_jobs --loop --sleep 5
 ```
 
-Pour un comportement synchrone en environnement local ciblé, `BACKGROUND_JOBS_EAGER` peut être activé par configuration, mais ce n'est pas le mode normal de production.
+Pour un comportement synchrone en environnement local ciblé, `BACKGROUND_JOBS_EAGER` peut être activé par configuration, mais ce n’est pas le mode normal de production.
 
 ## Données de démonstration
 
@@ -244,7 +257,7 @@ Le guide de test détaillé se trouve dans [TESTING.md](c:/Projects/Personal/202
 
 Règle importante :
 
-- utiliser l'environnement virtuel du projet
+- utiliser l’environnement virtuel du projet
 - ne pas utiliser `py manage.py ...` sur Windows pour ce dépôt
 
 Commandes courantes :
@@ -258,10 +271,10 @@ python manage.py check
 Le projet contient :
 
 - tests unitaires
-- tests d'intégration
+- tests d’intégration
 - tests applicatifs
 - tests PostgreSQL ciblés pour les chemins sensibles au verrouillage
-- tests navigateur E2E, avec exécution conditionnelle selon l'environnement local
+- tests navigateur E2E, avec exécution conditionnelle selon l’environnement local
 
 Le dossier principal est [tests](c:/Projects/Personal/2026/Full/eglises/tests).
 
@@ -293,7 +306,7 @@ Le dossier principal est [tests](c:/Projects/Personal/2026/Full/eglises/tests).
 - `/dashboard/audit/`
 - `/dashboard/utilisateurs/`
 
-### Plateforme superadmin
+### Console plateforme
 
 - `/dashboard/site/`
 - `/dashboard/platform/churches/`
@@ -309,18 +322,18 @@ Le dépôt contient déjà des fichiers de déploiement :
 
 - [render.yaml](c:/Projects/Personal/2026/Full/eglises/render.yaml)
   - web service
-  - worker de jobs d'arrière-plan
+  - worker de jobs d’arrière-plan
 - [docker-compose.yml](c:/Projects/Personal/2026/Full/eglises/docker-compose.yml)
   - PostgreSQL local pour le développement
 
 En production, utiliser PostgreSQL comme base principale et lancer le worker `process_background_jobs` séparément du processus web.
 
-## Points d'attention actuels
+## Points d’attention actuels
 
 Le projet a déjà une base sérieuse pour la production, mais il faut garder en tête :
 
 - PostgreSQL doit rester la base principale pour les workflows sensibles à la concurrence
-- les tests doivent être lancés depuis l'environnement virtuel du projet
+- les tests doivent être lancés depuis l’environnement virtuel du projet
 - les messages destinés aux utilisateurs restent en français
 - les commentaires, docstrings et autres éléments internes de code sont en anglais
 

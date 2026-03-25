@@ -6,7 +6,7 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
-from church.views import TenantLoginView
+from accounts.views import TenantLoginView
 
 urlpatterns = [
     path('admin/', admin.site.urls),

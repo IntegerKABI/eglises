@@ -14,29 +14,30 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from django.urls import reverse
 from django.utils import timezone
-from .cache import cache_public_view, get_church_cache_version
+from ..cache import cache_public_view, get_church_cache_version
 
-from .audit import log_audit_safely
-from .background_jobs import enqueue_contact_email_job
-from .forms import ContactForm, InviteSignupForm
-from .invitation_services import accept_invitation
-from .membership_policy import get_pending_invitations_for_user, validate_single_church_membership
-from .models import Church, ChurchInvitation, ContactMessage, Page, filter_public_queryset
-from .notifications import (
+from ..audit import log_audit_safely
+from ..background_jobs import enqueue_contact_email_job
+from ..forms import ContactForm, InviteSignupForm
+from ..services.invitation import accept_invitation
+from ..membership_policy import get_pending_invitations_for_user, validate_single_church_membership
+from ..models import Church, ChurchInvitation, ContactMessage, Page, filter_public_queryset
+from ..notifications import (
     notify_church_admins,
     notify_contact_recipients,
     notify_user,
     resolve_contact_recipient_groups,
 )
-from .rate_limits import (
+from ..rate_limits import (
     build_contact_rate_limit_rules,
     build_invite_accept_rate_limit_rules,
     build_rate_limit_message,
     consume_rate_limits,
 )
-from .tenancy import get_accessible_churches
-from .view_helpers import _get_choice_param, _get_public_church, _get_text_param, _has_pending_invitations, _mark_invite_notifications_read, _parse_bool_param, _querystring_without_page, is_ajax
-from .view_helpers import ajax_error_response, ajax_form_error_response, ajax_success_response
+from ..tenancy import get_accessible_churches
+from ..context.church import _get_public_church, _has_pending_invitations, _mark_invite_notifications_read
+from ..helpers.http import _get_choice_param, _get_text_param, _parse_bool_param, _querystring_without_page, ajax_error_response, ajax_form_error_response, ajax_success_response, is_ajax
+
 
 
 def _home_key(request):

@@ -3,10 +3,10 @@
 from django.db.models import Q
 from django.utils import timezone
 
-from .limits import filter_messages_for_retention, get_plan_usage
-from .models import ChurchInvitation, ChurchMembership, ContactMessage
-from .permissions import CAP_MANAGE_CHURCH_SETTINGS, CAP_MANAGE_MESSAGES, CAP_MANAGE_MEMBERS, CAP_MANAGE_PAGES
-from .http_helpers import _get_choice_param, _get_text_param, _parse_bool_param
+from ..limits import filter_messages_for_retention, get_plan_usage
+from ..models import ChurchInvitation, ChurchMembership, ContactMessage
+from ..permissions import CAP_MANAGE_CHURCH_SETTINGS, CAP_MANAGE_MESSAGES, CAP_MANAGE_MEMBERS, CAP_MANAGE_PAGES
+from .http import _get_choice_param, _get_text_param, _parse_bool_param
 
 
 def build_dashboard_context(*, church, user, capabilities):

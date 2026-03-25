@@ -1,14 +1,14 @@
 """Context processors shared across church templates."""
 
-from .limits import filter_notifications_for_retention
-from .models import Notification, SiteSettings
-from .permissions import (
+from ..limits import filter_notifications_for_retention
+from ..models import Notification, SiteSettings
+from ..permissions import (
     CAP_SWITCH_CHURCH,
     CAP_VIEW_AUDIT,
     get_capabilities_for_request,
     user_has_any_capability,
 )
-from .tenancy import get_accessible_churches
+from ..tenancy import get_accessible_churches
 
 
 def church_context(request):

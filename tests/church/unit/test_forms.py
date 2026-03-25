@@ -76,7 +76,7 @@ class ChurchFormTests(SaaSTestCase):
         )
 
         self.assertTrue(form.is_valid())
-        with patch("church.membership_services.ChurchMembership.objects.create", side_effect=RuntimeError("db error")):
+        with patch("church.services.membership.ChurchMembership.objects.create", side_effect=RuntimeError("db error")):
             with self.assertRaises(RuntimeError):
                 form.save(church=church)
 
@@ -94,7 +94,7 @@ class ChurchFormTests(SaaSTestCase):
         )
 
         self.assertTrue(form.is_valid())
-        with patch("church.membership_services.ChurchMembership.objects.create", side_effect=RuntimeError("db error")):
+        with patch("church.services.membership.ChurchMembership.objects.create", side_effect=RuntimeError("db error")):
             with self.assertRaises(RuntimeError):
                 form.save(church=church)
 

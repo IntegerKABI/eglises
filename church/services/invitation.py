@@ -8,12 +8,12 @@ from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
 
-from .audit import log_audit_safely
-from .background_jobs import enqueue_invite_email_job
-from .limits import enforce_limits_for_model
-from .models import ChurchInvitation, ChurchMembership
-from .notifications import notify_church_admins, notify_user
-from .view_helpers import _mark_invite_notifications_read
+from ..audit import log_audit_safely
+from ..background_jobs import enqueue_invite_email_job
+from ..limits import enforce_limits_for_model
+from ..models import ChurchInvitation, ChurchMembership
+from ..notifications import notify_church_admins, notify_user
+from ..context.church import _mark_invite_notifications_read
 
 @dataclass(frozen=True)
 class InvitationAcceptanceResult:

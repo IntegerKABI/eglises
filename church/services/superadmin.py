@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from django.db import transaction
 from django.urls import reverse
 
-from .audit import log_audit_safely
-from .background_jobs import enqueue_invite_email_job
-from .models import ChurchInvitation, ChurchMembership
-from .notifications import Notification, notify_user
-from .view_helpers import _schedule_safe_after_commit
+from ..audit import log_audit_safely
+from ..background_jobs import enqueue_invite_email_job
+from ..models import ChurchInvitation, ChurchMembership
+from ..notifications import Notification, notify_user
+from ..context.church import _schedule_safe_after_commit
 
 @dataclass(frozen=True)
 class SuperadminChurchCreateResult:

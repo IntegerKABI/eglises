@@ -18,10 +18,10 @@ from .models import (
     SiteSettings,
 )
 from .limits import enforce_limits_for_model
-from .invitation_services import create_signup_user_from_form
+from .services.invitation import create_signup_user_from_form
 from .membership_policy import validate_single_church_membership
-from .membership_services import assign_membership, create_church_user
-from .superadmin_services import create_church_from_form as create_church_from_form_service
+from .services.membership import assign_membership, create_church_user
+from .services.superadmin import create_church_from_form as create_church_from_form_service
 
 
 PLAN_OVERRIDE_FIELDS = [

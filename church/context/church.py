@@ -9,9 +9,9 @@ from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 
-from .membership_policy import get_pending_invitations_for_user
-from .models import Church, Notification
-from .tenancy import get_membership, get_selected_church
+from ..membership_policy import get_pending_invitations_for_user
+from ..models import Church, Notification
+from ..tenancy import get_membership, get_selected_church
 
 logger = logging.getLogger(__name__)
 

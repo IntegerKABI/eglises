@@ -1,6 +1,6 @@
 from django.test import RequestFactory
 
-from church.context_processors import church_context
+from church.context.processors import church_context
 from church.models import ChurchMembership, SiteSettings
 from tests.factories import SaaSTestCase
 

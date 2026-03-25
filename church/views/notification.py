@@ -7,21 +7,14 @@ from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 
-from .audit import log_audit_safely
-from .forms import SiteSettingsForm
-from .limits import filter_notifications_for_retention
-from .models import AuditLog, Notification, SiteSettings
-from .permissions import CAP_MANAGE_SITE_SETTINGS, CAP_VIEW_AUDIT, CAP_VIEW_DASHBOARD, get_churches_for_capability, require_capability
-from .tenancy import get_accessible_churches, get_selected_church
-from .view_helpers import (
-    _get_choice_param,
-    _get_text_param,
-    _querystring_without_page,
-    _require_church,
-    ajax_form_error_response,
-    ajax_success_response,
-    is_ajax,
-)
+from ..audit import log_audit_safely
+from ..forms import SiteSettingsForm
+from ..limits import filter_notifications_for_retention
+from ..models import AuditLog, Notification, SiteSettings
+from ..permissions import CAP_MANAGE_SITE_SETTINGS, CAP_VIEW_AUDIT, CAP_VIEW_DASHBOARD, get_churches_for_capability, require_capability
+from ..tenancy import get_accessible_churches, get_selected_church
+from ..context.church import _require_church
+from ..helpers.http import _get_choice_param, _get_text_param, _querystring_without_page, ajax_form_error_response, ajax_success_response, is_ajax
 
 
 @login_required

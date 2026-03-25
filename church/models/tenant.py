@@ -8,9 +8,9 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
-from .cache import bump_site_cache_version
-from .membership_policy import validate_single_church_membership
-from .model_helpers import (
+from ..cache import bump_site_cache_version
+from ..membership_policy import validate_single_church_membership
+from ..helpers.model import (
     CHURCH_PLAN_LIMITS,
     SITE_SETTINGS_CACHE_KEY,
     _default_invite_expiry,

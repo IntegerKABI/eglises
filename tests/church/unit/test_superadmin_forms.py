@@ -129,7 +129,7 @@ class SuperAdminChurchFormTests(SaaSTestCase):
         )
 
         self.assertTrue(form.is_valid(), form.errors)
-        with patch("church.superadmin_services.ChurchInvitation.objects.create", side_effect=RuntimeError("boom")):
+        with patch("church.services.superadmin.ChurchInvitation.objects.create", side_effect=RuntimeError("boom")):
             with self.assertRaises(RuntimeError):
                 form.save()
 

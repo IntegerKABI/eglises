@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from django.db import transaction
 from django.urls import reverse
 
-from .audit import log_audit_safely
-from .limits import enforce_limits_for_model
-from .models import ChurchMembership
-from .notifications import notify_user_role_change
-from .view_helpers import _schedule_safe_after_commit
+from ..audit import log_audit_safely
+from ..limits import enforce_limits_for_model
+from ..models import ChurchMembership
+from ..notifications import notify_user_role_change
+from ..context.church import _schedule_safe_after_commit
 
 @dataclass(frozen=True)
 class MembershipAssignmentResult:

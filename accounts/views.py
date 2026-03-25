@@ -1,13 +1,14 @@
-"""Authentication-oriented views and login helpers for the church app."""
+
+"""Authentication-oriented views for the accounts app."""
 
 from django.contrib import messages
 from django.contrib.auth import logout
 from django.contrib.auth.views import LoginView
 from django.urls import reverse
 
-from .rate_limits import build_login_rate_limit_rules, build_rate_limit_message, consume_rate_limits, reset_rate_limits
-from .tenancy import get_accessible_churches
-from .church_context import _has_pending_invitations
+from church.context.church import _has_pending_invitations
+from church.rate_limits import build_login_rate_limit_rules, build_rate_limit_message, consume_rate_limits, reset_rate_limits
+from church.tenancy import get_accessible_churches
 
 
 class TenantLoginView(LoginView):

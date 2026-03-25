@@ -134,7 +134,7 @@ class SuperAdminChurchManagementIntegrationTests(SaaSTestCase):
             email="rollback-candidate@example.com",
         )
 
-        with patch("church.superadmin_services.ChurchInvitation.objects.create", side_effect=RuntimeError("boom")):
+        with patch("church.services.superadmin.ChurchInvitation.objects.create", side_effect=RuntimeError("boom")):
             with self.assertRaises(RuntimeError):
                 self.client.post(
                     reverse("superadmin_church_create"),

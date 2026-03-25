@@ -2,7 +2,7 @@
 
 from django.core.paginator import Paginator
 
-from .http_helpers import _querystring_without_page
+from .http import _querystring_without_page
 
 
 def build_paginated_list_context(*, request, queryset, per_page, item_key):

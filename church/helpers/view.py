@@ -1,15 +1,15 @@
 """Compatibility re-exports for historical church view helper imports."""
 
-from .auth_views import TenantLoginView
-from .church_context import (
+from accounts.views import TenantLoginView
+from ..context.church import (
     _get_public_church,
     _has_pending_invitations,
     _mark_invite_notifications_read,
     _require_church,
     _schedule_safe_after_commit,
 )
-from .form_helpers import _handle_church_delete, _handle_church_form
-from .http_helpers import (
+from .form import _handle_church_delete, _handle_church_form
+from .http import (
     _get_choice_param,
     _get_text_param,
     _parse_bool_param,

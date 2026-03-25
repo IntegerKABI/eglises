@@ -5,10 +5,10 @@ from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
 
-from .audit import log_audit_safely
-from .church_context import _require_church
-from .limits import enforce_limits_for_model
-from .http_helpers import ajax_form_error_response, ajax_success_response, is_ajax
+from ..audit import log_audit_safely
+from ..context.church import _require_church
+from ..limits import enforce_limits_for_model
+from .http import ajax_form_error_response, ajax_success_response, is_ajax
 
 
 def _handle_church_form(

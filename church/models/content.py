@@ -6,7 +6,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.html import strip_tags
 
-from .model_helpers import (
+from ..helpers.model import (
     _generate_unique_slug,
     upload_event_image,
     upload_member_photo,

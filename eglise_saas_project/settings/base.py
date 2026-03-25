@@ -152,7 +152,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
-                "church.context_processors.church_context",
+                "church.context.processors.church_context",
             ],
         },
     },

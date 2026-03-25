@@ -7,32 +7,28 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import (
+from ..forms import (
     SuperAdminChurchCreateForm,
     SuperAdminChurchPlanForm,
     SuperAdminChurchStatusForm,
     SuperAdminChurchUpdateForm,
 )
-from .limits import get_plan_usage, get_plan_usage_for_churches
-from .models import AuditLog, Church, ChurchInvitation, ChurchMembership, Event, Member, Page, Sermon
-from .permissions import CAP_MANAGE_SITE_SETTINGS, require_capability
-from .rate_limits import (
+from ..limits import get_plan_usage, get_plan_usage_for_churches
+from ..models import AuditLog, Church, ChurchInvitation, ChurchMembership, Event, Member, Page, Sermon
+from ..permissions import CAP_MANAGE_SITE_SETTINGS, require_capability
+from ..rate_limits import (
     build_invite_send_rate_limit_rules,
     build_rate_limit_message,
     consume_rate_limits,
 )
-from .superadmin_services import (
+from ..services.superadmin import (
     create_church_from_form,
     update_church_plan_from_form,
     update_church_profile_from_form,
     update_church_status_from_form,
 )
-from .list_view_helpers import build_paginated_list_context
-from .view_helpers import (
-    ajax_form_error_response,
-    ajax_success_response,
-    is_ajax,
-)
+from ..helpers.list_view import build_paginated_list_context
+from ..helpers.http import ajax_form_error_response, ajax_success_response, is_ajax
 
 
 def _superadmin_church_list_queryset():

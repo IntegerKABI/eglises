@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from django.db import transaction
 from django.utils import timezone
 
-from .communication_models import ContactMessageReply
-from .models import ContactMessage
+from ..models import ContactMessageReply
+from ..models import ContactMessage
 
 
 @dataclass(frozen=True)

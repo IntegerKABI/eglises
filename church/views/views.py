@@ -1,7 +1,7 @@
 """Dashboard views and the historical public import surface for the church app."""
+
 import logging
 
-logger = logging.getLogger(__name__)
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
@@ -9,8 +9,8 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-from .audit import log_audit_safely
-from .forms import (
+from ..audit import log_audit_safely
+from ..forms import (
     ChurchForm,
     ChurchInvitationForm,
     ChurchMembershipAssignForm,
@@ -23,51 +23,7 @@ from .forms import (
     SermonForm,
     TransferAdminForm,
 )
-from .invitation_services import (
-    create_invitation_from_form,
-    resend_invitation as resend_invitation_service,
-    revoke_invitation as revoke_invitation_service,
-)
-from .limits import enforce_limits_for_model, filter_messages_for_retention
-from .membership_services import (
-    assign_membership_from_form,
-    set_membership_active_state,
-    transfer_admin_role,
-    update_membership,
-)
-from .message_services import (
-    archive_message,
-    assign_message_to_user,
-    mark_message_as_read,
-    respond_to_message,
-    unassign_message,
-)
-from .models import Church, ChurchInvitation, ChurchMembership, ContactMessage, Event, Member, Page, Sermon
-from .notifications import (
-    notify_church_admins,
-    notify_event_recipients,
-    notify_message_recipients,
-    notify_user,
-    notify_user_role_change,
-)
-from .permissions import (
-    CAP_MANAGE_CHURCH_SETTINGS,
-    CAP_MANAGE_EVENTS,
-    CAP_MANAGE_MEMBERS,
-    CAP_MANAGE_MESSAGES,
-    CAP_MANAGE_PAGES,
-    CAP_MANAGE_SERMONS,
-    CAP_MANAGE_USERS,
-    CAP_VIEW_DASHBOARD,
-    get_capabilities_for_user,
-    require_capability,
-)
-from .rate_limits import (
-    build_invite_send_rate_limit_rules,
-    build_rate_limit_message,
-    consume_rate_limits,
-)
-from .public_views import (
+from .public import (
     accept_invite,
     church_contact,
     church_events,
@@ -79,14 +35,14 @@ from .public_views import (
     pending_invitations,
     select_church,
 )
-from .notification_views import (
+from .notification import (
     manage_audit_logs,
     manage_notifications,
     mark_all_notifications_read,
     open_notification,
     site_settings,
 )
-from .superadmin_views import (
+from .superadmin import (
     superadmin_church_create,
     superadmin_church_detail,
     superadmin_church_edit,
@@ -95,8 +51,11 @@ from .superadmin_views import (
     superadmin_church_status,
     superadmin_switch_church,
 )
-from .tenancy import get_membership
-from .query_helpers import (
+from ..context.church import _require_church, _schedule_safe_after_commit
+from ..helpers.form import _handle_church_delete, _handle_church_form
+from ..helpers.http import ajax_error_response, ajax_form_error_response, ajax_success_response, is_ajax
+from ..helpers.list_view import build_paginated_list_context
+from ..helpers.query import (
     build_dashboard_context,
     build_manage_events_queryset,
     build_manage_messages_queryset,
@@ -105,18 +64,53 @@ from .query_helpers import (
     build_manage_sermons_queryset,
     build_manage_users_querysets,
 )
-from .list_view_helpers import build_paginated_list_context
-from .view_helpers import (
-    TenantLoginView,
-    _handle_church_delete,
-    _handle_church_form,
-    _require_church,
-    _schedule_safe_after_commit,
-    ajax_error_response,
-    ajax_form_error_response,
-    ajax_success_response,
-    is_ajax,
+from ..limits import enforce_limits_for_model, filter_messages_for_retention
+from ..models import Church, ChurchInvitation, ChurchMembership, ContactMessage, Event, Member, Page, Sermon
+from ..notifications import (
+    notify_church_admins,
+    notify_event_recipients,
+    notify_message_recipients,
+    notify_user,
+    notify_user_role_change,
 )
+from ..permissions import (
+    CAP_MANAGE_CHURCH_SETTINGS,
+    CAP_MANAGE_EVENTS,
+    CAP_MANAGE_MEMBERS,
+    CAP_MANAGE_MESSAGES,
+    CAP_MANAGE_PAGES,
+    CAP_MANAGE_SERMONS,
+    CAP_MANAGE_USERS,
+    CAP_VIEW_DASHBOARD,
+    get_capabilities_for_user,
+    require_capability,
+)
+from ..rate_limits import (
+    build_invite_send_rate_limit_rules,
+    build_rate_limit_message,
+    consume_rate_limits,
+)
+from ..services.invitation import (
+    create_invitation_from_form,
+    resend_invitation as resend_invitation_service,
+    revoke_invitation as revoke_invitation_service,
+)
+from ..services.membership import (
+    assign_membership_from_form,
+    set_membership_active_state,
+    transfer_admin_role,
+    update_membership,
+)
+from ..services.message import (
+    archive_message,
+    assign_message_to_user,
+    mark_message_as_read,
+    respond_to_message,
+    unassign_message,
+)
+from ..tenancy import get_membership
+
+logger = logging.getLogger(__name__)
 
 
 @login_required
