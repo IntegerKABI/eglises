@@ -2,7 +2,6 @@
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.paginator import Paginator
 from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -28,8 +27,8 @@ from .superadmin_services import (
     update_church_profile_from_form,
     update_church_status_from_form,
 )
+from .list_view_helpers import build_paginated_list_context
 from .view_helpers import (
-    _querystring_without_page,
     ajax_form_error_response,
     ajax_success_response,
     is_ajax,
@@ -169,8 +168,8 @@ def superadmin_church_list(request):
     else:
         plan = ''
 
-    paginator = Paginator(churches, 12)
-    page_obj = paginator.get_page(request.GET.get('page'))
+    context = build_paginated_list_context(request=request, queryset=churches, per_page=12, item_key='churches')
+    page_obj = context['page_obj']
     usage_by_church = get_plan_usage_for_churches(page_obj.object_list)
 
     tenant_cards = [
@@ -186,10 +185,8 @@ def superadmin_church_list(request):
         'admin_dashboard/superadmin/church_list.html',
         {
             'church': getattr(request, 'current_church', None),
-            'churches': page_obj,
-            'page_obj': page_obj,
+            **context,
             'tenant_cards': tenant_cards,
-            'querystring': _querystring_without_page(request),
             'status_choices': Church.Status.choices,
             'plan_choices': Church.Plan.choices,
             'selected_status': status,

@@ -5,7 +5,6 @@ logger = logging.getLogger(__name__)
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.core.paginator import Paginator
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -106,11 +105,11 @@ from .query_helpers import (
     build_manage_sermons_queryset,
     build_manage_users_querysets,
 )
+from .list_view_helpers import build_paginated_list_context
 from .view_helpers import (
     TenantLoginView,
     _handle_church_delete,
     _handle_church_form,
-    _querystring_without_page,
     _require_church,
     _schedule_safe_after_commit,
     ajax_error_response,
@@ -192,14 +191,9 @@ def manage_events(request):
     if not church:
         return redirect('select_church')
     events = build_manage_events_queryset(request=request, church=church)
-    paginator = Paginator(events, 10)
-    page_obj = paginator.get_page(request.GET.get('page'))
-    return render(request, 'admin_dashboard/manage_events.html', {
-        'church': church,
-        'events': page_obj,
-        'page_obj': page_obj,
-        'querystring': _querystring_without_page(request),
-    })
+    context = build_paginated_list_context(request=request, queryset=events, per_page=10, item_key='events')
+    context['church'] = church
+    return render(request, 'admin_dashboard/manage_events.html', context)
 
 
 @login_required
@@ -286,14 +280,9 @@ def manage_sermons(request):
     if not church:
         return redirect('select_church')
     sermons = build_manage_sermons_queryset(request=request, church=church)
-    paginator = Paginator(sermons, 10)
-    page_obj = paginator.get_page(request.GET.get('page'))
-    return render(request, 'admin_dashboard/manage_sermons.html', {
-        'church': church,
-        'sermons': page_obj,
-        'page_obj': page_obj,
-        'querystring': _querystring_without_page(request),
-    })
+    context = build_paginated_list_context(request=request, queryset=sermons, per_page=10, item_key='sermons')
+    context['church'] = church
+    return render(request, 'admin_dashboard/manage_sermons.html', context)
 
 
 @login_required
@@ -344,14 +333,9 @@ def manage_members(request):
     if not church:
         return redirect('select_church')
     members = build_manage_members_queryset(request=request, church=church)
-    paginator = Paginator(members, 10)
-    page_obj = paginator.get_page(request.GET.get('page'))
-    return render(request, 'admin_dashboard/manage_members.html', {
-        'church': church,
-        'members': page_obj,
-        'page_obj': page_obj,
-        'querystring': _querystring_without_page(request),
-    })
+    context = build_paginated_list_context(request=request, queryset=members, per_page=10, item_key='members')
+    context['church'] = church
+    return render(request, 'admin_dashboard/manage_members.html', context)
 
 
 @login_required
@@ -402,14 +386,9 @@ def manage_pages(request):
     if not church:
         return redirect('select_church')
     pages = build_manage_pages_queryset(request=request, church=church)
-    paginator = Paginator(pages, 10)
-    page_obj = paginator.get_page(request.GET.get('page'))
-    return render(request, 'admin_dashboard/manage_pages.html', {
-        'church': church,
-        'pages': page_obj,
-        'page_obj': page_obj,
-        'querystring': _querystring_without_page(request),
-    })
+    context = build_paginated_list_context(request=request, queryset=pages, per_page=10, item_key='pages')
+    context['church'] = church
+    return render(request, 'admin_dashboard/manage_pages.html', context)
 
 
 @login_required
@@ -460,15 +439,15 @@ def manage_users(request):
     if not church:
         return redirect('select_church')
     memberships, pending_invites = build_manage_users_querysets(request=request, church=church)
-    paginator = Paginator(memberships.order_by('user__last_name', 'user__first_name'), 10)
-    page_obj = paginator.get_page(request.GET.get('page'))
-    return render(request, 'admin_dashboard/manage_users.html', {
-        'church': church,
-        'memberships': page_obj,
-        'page_obj': page_obj,
-        'pending_invites': pending_invites,
-        'querystring': _querystring_without_page(request),
-    })
+    context = build_paginated_list_context(
+        request=request,
+        queryset=memberships.order_by('user__last_name', 'user__first_name'),
+        per_page=10,
+        item_key='memberships',
+    )
+    context['church'] = church
+    context['pending_invites'] = pending_invites
+    return render(request, 'admin_dashboard/manage_users.html', context)
 
 
 @login_required
@@ -765,14 +744,14 @@ def manage_messages(request):
     if not church:
         return redirect('select_church')
     contact_messages = build_manage_messages_queryset(request=request, church=church)
-    paginator = Paginator(contact_messages, 10)
-    page_obj = paginator.get_page(request.GET.get('page'))
-    return render(request, 'admin_dashboard/manage_messages.html', {
-        'church': church,
-        'contact_messages': page_obj,
-        'page_obj': page_obj,
-        'querystring': _querystring_without_page(request),
-    })
+    context = build_paginated_list_context(
+        request=request,
+        queryset=contact_messages,
+        per_page=10,
+        item_key='contact_messages',
+    )
+    context['church'] = church
+    return render(request, 'admin_dashboard/manage_messages.html', context)
 
 
 @login_required
