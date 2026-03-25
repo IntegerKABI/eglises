@@ -274,7 +274,7 @@ Le projet contient :
 - tests d’intégration
 - tests applicatifs
 - tests PostgreSQL ciblés pour les chemins sensibles au verrouillage
-- tests navigateur E2E, avec exécution conditionnelle selon l’environnement local
+- tests navigateur E2E, exécutés quand Playwright est installé et que Chromium démarre correctement, avec un saut par défaut sur Windows si l’environnement local ne peut pas lancer Chromium
 
 Le dossier principal est [tests](c:/Projects/Personal/2026/Full/eglises/tests).
 

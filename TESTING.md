@@ -79,7 +79,7 @@ Then run the browser journeys.
 python manage.py test tests.church.e2e --noinput
 ```
 
-On Windows, the browser suite is skipped by default because some local environments block the browser subprocess. Set `ENABLE_WINDOWS_PLAYWRIGHT_E2E=1` only when the machine is configured to allow Playwright to launch Chromium.
+The browser suite runs whenever Playwright is installed and Chromium can start in the current environment. On Windows, it is skipped by default unless `ENABLE_WINDOWS_PLAYWRIGHT_E2E=1` is set and the machine can launch Chromium.
 
 ## CI coverage
 
