@@ -138,6 +138,7 @@ def _build_effective_limit_rows(church):
 @login_required
 @require_capability(CAP_MANAGE_SITE_SETTINGS)
 def superadmin_church_list(request):
+    """Render the tenant list so platform admins can inspect all churches."""
     churches = _superadmin_church_list_queryset()
 
     query = (request.GET.get('q') or '').strip()
@@ -199,6 +200,7 @@ def superadmin_church_list(request):
 @login_required
 @require_capability(CAP_MANAGE_SITE_SETTINGS)
 def superadmin_church_detail(request, pk):
+    """Show tenant details, usage, and recent activity for platform admins."""
     church = get_object_or_404(_superadmin_church_detail_queryset(), pk=pk)
     tenant_usage = get_plan_usage(church)
     recent_audit_logs = AuditLog.objects.filter(church=church).select_related('actor')[:10]
@@ -220,6 +222,7 @@ def superadmin_church_detail(request, pk):
 @login_required
 @require_capability(CAP_MANAGE_SITE_SETTINGS)
 def superadmin_church_create(request):
+    """Create a tenant and its first administrator from the platform console."""
     if request.method == 'POST':
         form = SuperAdminChurchCreateForm(request.POST, request.FILES)
         if request.POST.get("admin_assignment_mode") == "existing":
@@ -275,6 +278,7 @@ def superadmin_church_create(request):
 @login_required
 @require_capability(CAP_MANAGE_SITE_SETTINGS)
 def superadmin_church_edit(request, pk):
+    """Edit tenant branding and contact details from the platform console."""
     managed_church = get_object_or_404(Church, pk=pk)
     if request.method == 'POST':
         form = SuperAdminChurchUpdateForm(request.POST, request.FILES, instance=managed_church)
@@ -310,6 +314,7 @@ def superadmin_church_edit(request, pk):
 @login_required
 @require_capability(CAP_MANAGE_SITE_SETTINGS)
 def superadmin_church_status(request, pk):
+    """Change a tenant's activation state while enforcing admin invariants."""
     managed_church = get_object_or_404(Church, pk=pk)
     previous_status = managed_church.status
     if request.method == 'POST':
@@ -348,6 +353,7 @@ def superadmin_church_status(request, pk):
 @login_required
 @require_capability(CAP_MANAGE_SITE_SETTINGS)
 def superadmin_church_plan(request, pk):
+    """Update the tenant plan and limit configuration from the platform console."""
     managed_church = get_object_or_404(Church, pk=pk)
     before_limits = _serialize_limit_configuration(managed_church)
     if request.method == 'POST':
@@ -387,6 +393,7 @@ def superadmin_church_plan(request, pk):
 @login_required
 @require_capability(CAP_MANAGE_SITE_SETTINGS)
 def superadmin_switch_church(request, pk):
+    """Switch the active dashboard context to a managed tenant for support work."""
     managed_church = get_object_or_404(Church, pk=pk)
     if request.method != 'POST':
         return redirect('superadmin_church_detail', pk=managed_church.pk)

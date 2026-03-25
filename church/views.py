@@ -276,6 +276,7 @@ def delete_event(request, pk):
 @login_required
 @require_capability(CAP_MANAGE_SERMONS)
 def manage_sermons(request):
+    """Render the sermon list so church staff can review sermons in one place."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -288,6 +289,7 @@ def manage_sermons(request):
 @login_required
 @require_capability(CAP_MANAGE_SERMONS)
 def add_sermon(request):
+    """Handle sermon creation from the dashboard while keeping request code thin."""
     return _handle_church_form(
         request,
         form_class=SermonForm,
@@ -301,6 +303,7 @@ def add_sermon(request):
 @login_required
 @require_capability(CAP_MANAGE_SERMONS)
 def edit_sermon(request, pk):
+    """Handle sermon edits without duplicating the shared form workflow."""
     return _handle_church_form(
         request,
         form_class=SermonForm,
@@ -317,6 +320,7 @@ def edit_sermon(request, pk):
 @login_required
 @require_capability(CAP_MANAGE_SERMONS)
 def delete_sermon(request, pk):
+    """Delete a sermon through the shared church-scoped object workflow."""
     return _handle_church_delete(
         request,
         model=Sermon,
@@ -329,6 +333,7 @@ def delete_sermon(request, pk):
 @login_required
 @require_capability(CAP_MANAGE_MEMBERS)
 def manage_members(request):
+    """Render the member list so the church can review active member records."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -341,6 +346,7 @@ def manage_members(request):
 @login_required
 @require_capability(CAP_MANAGE_MEMBERS)
 def add_member(request):
+    """Handle member creation through the shared form orchestration helper."""
     return _handle_church_form(
         request,
         form_class=MemberForm,
@@ -354,6 +360,7 @@ def add_member(request):
 @login_required
 @require_capability(CAP_MANAGE_MEMBERS)
 def edit_member(request, pk):
+    """Handle member edits without repeating the create/update flow."""
     return _handle_church_form(
         request,
         form_class=MemberForm,
@@ -370,6 +377,7 @@ def edit_member(request, pk):
 @login_required
 @require_capability(CAP_MANAGE_MEMBERS)
 def delete_member(request, pk):
+    """Delete a member record through the shared church-scoped delete flow."""
     return _handle_church_delete(
         request,
         model=Member,
@@ -382,6 +390,7 @@ def delete_member(request, pk):
 @login_required
 @require_capability(CAP_MANAGE_PAGES)
 def manage_pages(request):
+    """Render the page list so church staff can manage public and draft pages."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -394,6 +403,7 @@ def manage_pages(request):
 @login_required
 @require_capability(CAP_MANAGE_PAGES)
 def add_page(request):
+    """Handle page creation through the shared form orchestration helper."""
     return _handle_church_form(
         request,
         form_class=PageForm,
@@ -407,6 +417,7 @@ def add_page(request):
 @login_required
 @require_capability(CAP_MANAGE_PAGES)
 def edit_page(request, pk):
+    """Handle page edits without duplicating the shared dashboard form flow."""
     return _handle_church_form(
         request,
         form_class=PageForm,
@@ -423,6 +434,7 @@ def edit_page(request, pk):
 @login_required
 @require_capability(CAP_MANAGE_PAGES)
 def delete_page(request, pk):
+    """Delete a page through the shared church-scoped delete helper."""
     return _handle_church_delete(
         request,
         model=Page,
@@ -435,6 +447,7 @@ def delete_page(request, pk):
 @login_required
 @require_capability(CAP_MANAGE_USERS)
 def manage_users(request):
+    """Render the user and invitation list so membership work stays centralised."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -453,6 +466,7 @@ def manage_users(request):
 @login_required
 @require_capability(CAP_MANAGE_USERS)
 def add_user(request):
+    """Create a church user and schedule follow-up work without bloating the view."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -514,6 +528,7 @@ def add_user(request):
 @login_required
 @require_capability(CAP_MANAGE_USERS)
 def assign_user(request):
+    """Assign an existing user to the church through the membership service layer."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -549,6 +564,7 @@ def assign_user(request):
 @login_required
 @require_capability(CAP_MANAGE_USERS)
 def invite_user(request):
+    """Invite a user while keeping throttling, validation, and delivery separated."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -589,6 +605,7 @@ def invite_user(request):
 @login_required
 @require_capability(CAP_MANAGE_USERS)
 def revoke_invite(request, pk):
+    """Revoke a pending invitation without duplicating the revoke workflow."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -602,6 +619,7 @@ def revoke_invite(request, pk):
 @login_required
 @require_capability(CAP_MANAGE_USERS)
 def resend_invite(request, pk):
+    """Resend a pending invitation through the invitation service layer."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -621,6 +639,7 @@ def resend_invite(request, pk):
 @login_required
 @require_capability(CAP_MANAGE_USERS)
 def toggle_membership(request, pk):
+    """Activate or deactivate a membership while preserving admin invariants."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -650,6 +669,7 @@ def toggle_membership(request, pk):
 @login_required
 @require_capability(CAP_MANAGE_USERS)
 def transfer_admin(request):
+    """Transfer tenant administration without repeating the promotion rules."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -697,6 +717,7 @@ def transfer_admin(request):
 @login_required
 @require_capability(CAP_MANAGE_USERS)
 def edit_membership(request, pk):
+    """Update a membership role or status through the shared service layer."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -740,6 +761,7 @@ def edit_membership(request, pk):
 @login_required
 @require_capability(CAP_MANAGE_MESSAGES)
 def manage_messages(request):
+    """Render the message inbox so staff can triage contact requests in one place."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -757,6 +779,7 @@ def manage_messages(request):
 @login_required
 @require_capability(CAP_MANAGE_MESSAGES)
 def read_message(request, pk):
+    """Render and process a single message thread without duplicating message actions."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')

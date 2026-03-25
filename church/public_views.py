@@ -238,6 +238,7 @@ def church_contact(request, church_slug):
 
 
 def accept_invite(request, token):
+    """Let an invited user accept access without exposing invitation internals."""
     invite = get_object_or_404(ChurchInvitation, token=token)
     if invite.status != ChurchInvitation.Status.PENDING:
         messages.info(request, "Cette invitation n'est plus disponible.")
@@ -301,6 +302,7 @@ def accept_invite(request, token):
 
 @login_required
 def pending_invitations(request):
+    """Show pending invitations so a user can finish joining a church."""
     invitations = get_pending_invitations_for_user(request.user)
     if invitations.exists():
         return render(request, 'church/pending_invitations.html', {
@@ -322,6 +324,7 @@ def pending_invitations(request):
 @login_required
 @require_POST
 def decline_invite(request, token):
+    """Decline an invitation and keep the public workflow's state consistent."""
     invite = get_object_or_404(
         ChurchInvitation,
         token=token,
@@ -374,6 +377,7 @@ def decline_invite(request, token):
 
 @login_required
 def select_church(request):
+    """Let a user choose the active church context when they belong to several."""
     churches = get_accessible_churches(request.user)
     if not churches.exists():
         messages.warning(request, "Aucune église associée à votre compte.")

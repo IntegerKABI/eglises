@@ -30,6 +30,7 @@ from .view_helpers import (
 @login_required
 @require_capability(CAP_VIEW_DASHBOARD)
 def manage_notifications(request):
+    """Show the user's notifications for the active church context."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -66,6 +67,7 @@ def manage_notifications(request):
 @login_required
 @require_capability(CAP_VIEW_DASHBOARD)
 def open_notification(request, pk):
+    """Open a notification and redirect to its linked destination when valid."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -96,6 +98,7 @@ def open_notification(request, pk):
 @login_required
 @require_capability(CAP_VIEW_DASHBOARD)
 def mark_all_notifications_read(request):
+    """Mark all visible notifications as read for the active church context."""
     church = _require_church(request)
     if not church:
         return redirect('select_church')
@@ -115,6 +118,7 @@ def mark_all_notifications_read(request):
 @login_required
 @require_capability(CAP_VIEW_AUDIT)
 def manage_audit_logs(request):
+    """Show audit logs so platform and tenant admins can review activity."""
     churches = get_churches_for_capability(request.user, CAP_VIEW_AUDIT)
     logs = AuditLog.objects.select_related('actor', 'church')
     if not request.user.is_superuser:

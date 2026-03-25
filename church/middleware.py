@@ -5,6 +5,7 @@ from .tenancy import get_selected_church, get_membership
 
 
 def _menu_pages_queryset():
+    """Build the menu-page queryset so public pages can prefetch navigation once."""
     return filter_public_queryset(Page.objects.filter(is_in_menu=True)).only(
         'id',
         'church_id',
@@ -18,13 +19,18 @@ def _menu_pages_queryset():
 
 
 class CurrentChurchMiddleware:
+    """Attach the active church and membership to each request before views run."""
+
     def __init__(self, get_response):
+        """Store the downstream handler so the middleware can delegate after setup."""
         self.get_response = get_response
 
     def __call__(self, request):
+        """Pass the request through unchanged when Django invokes the middleware."""
         return self.get_response(request)
 
     def process_view(self, request, view_func, view_args, view_kwargs):
+        """Resolve the current church context before the selected view executes."""
         request.current_church = None
         request.current_membership = None
         request.current_church_slug = view_kwargs.get('church_slug')

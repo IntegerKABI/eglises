@@ -6,6 +6,7 @@ from .limits import invalidate_plan_usage_cache
 
 @receiver([post_save, post_delete], sender=Church)
 def invalidate_church_cache(sender, instance, **kwargs):
+    """Invalidate public cache state whenever a church row changes."""
     bump_church_cache_version(None)
     if hasattr(instance, 'slug'):
         bump_church_cache_version(instance.slug)
@@ -18,6 +19,7 @@ def invalidate_church_cache(sender, instance, **kwargs):
 @receiver([post_save, post_delete], sender=ChurchMembership)
 @receiver([post_save, post_delete], sender=ChurchInvitation)
 def invalidate_church_content_cache(sender, instance, **kwargs):
+    """Invalidate the tenant cache whenever related content changes."""
     if instance.church:
         bump_church_cache_version(instance.church.slug)
         invalidate_plan_usage_cache(instance.church_id)
