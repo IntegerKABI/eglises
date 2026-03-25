@@ -4,7 +4,6 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from django.db import transaction
 
 from .models import (
     Church,
@@ -19,7 +18,10 @@ from .models import (
     SiteSettings,
 )
 from .limits import enforce_limits_for_model
+from .invitation_services import create_signup_user_from_form
 from .membership_policy import validate_single_church_membership
+from .membership_services import assign_membership, create_church_user
+from .superadmin_services import create_church_from_form as create_church_from_form_service
 
 
 PLAN_OVERRIDE_FIELDS = [
@@ -383,35 +385,11 @@ class SuperAdminChurchCreateForm(forms.ModelForm):
         if self.admin_user is None:
             raise ValueError("Le formulaire doit etre valide avant l'enregistrement.")
 
-        with transaction.atomic():
-            church = super().save(commit=True)
-            admin_user = self.admin_user
-            membership = None
-            invitation = None
-            if self.create_new_admin:
-                enforce_limits_for_model(church, ChurchMembership)
-                admin_user.set_password(self.cleaned_data['new_admin_password1'])
-                admin_user.is_active = True
-                admin_user.save()
-                membership = ChurchMembership.objects.create(
-                    user=admin_user,
-                    church=church,
-                    role=ChurchMembership.Role.ADMIN,
-                    is_active=True,
-                )
-            else:
-                enforce_limits_for_model(church, ChurchInvitation)
-                invitation = ChurchInvitation.objects.create(
-                    church=church,
-                    email=admin_user.email.strip().lower(),
-                    role=ChurchMembership.Role.ADMIN,
-                    invited_by=invited_by,
-                )
-
-        self.created_admin_user = admin_user
-        self.created_membership = membership
-        self.created_invitation = invitation
-        return church
+        result = create_church_from_form_service(request=None, actor=invited_by, form=self)
+        self.created_admin_user = result.created_admin_user
+        self.created_membership = result.membership
+        self.created_invitation = result.invitation
+        return result.church
 
 
 class ContactMessageReplyForm(forms.ModelForm):
@@ -453,19 +431,9 @@ class ChurchUserCreateForm(forms.ModelForm):
     def save(self, church, commit=True):
         if not commit:
             raise ValueError("ChurchUserCreateForm.save requires commit=True.")
-
-        user = super().save(commit=False)
-        user.set_password(self.cleaned_data['password1'])
-        with transaction.atomic():
-            enforce_limits_for_model(church, ChurchMembership)
-            user.save()
-            self.membership = ChurchMembership.objects.create(
-                user=user,
-                church=church,
-                role=self.cleaned_data['role'],
-                is_active=True,
-            )
-        return user
+        result = create_church_user(actor=None, church=church, form=self)
+        self.membership = result.membership
+        return result.user
 
 
 class ChurchMembershipAssignForm(forms.Form):
@@ -499,35 +467,18 @@ class ChurchMembershipAssignForm(forms.Form):
         self.user = user
         return cleaned_data
 
-    def save(self, church):
+    def save(self, church, actor=None):
         if not self.user:
             raise ValidationError("Utilisateur introuvable.")
-
-        with transaction.atomic():
-            membership = (
-                ChurchMembership.objects.select_for_update()
-                .filter(user=self.user, church=church)
-                .first()
-            )
-            if membership:
-                if not membership.is_active:
-                    enforce_limits_for_model(church, ChurchMembership)
-                membership.role = self.cleaned_data['role']
-                membership.is_active = True
-                membership.save(update_fields=['role', 'is_active'])
-                self.created = False
-                self.membership = membership
-                return membership
-
-            self.created = True
-            enforce_limits_for_model(church, ChurchMembership)
-            self.membership = ChurchMembership.objects.create(
-                user=self.user,
-                church=church,
-                role=self.cleaned_data['role'],
-                is_active=True,
-            )
-            return self.membership
+        result = assign_membership(
+            actor=actor,
+            church=church,
+            user=self.user,
+            role=self.cleaned_data['role'],
+        )
+        self.created = result.created
+        self.membership = result.membership
+        return result.membership
 
 
 class ChurchMembershipUpdateForm(forms.ModelForm):
@@ -565,7 +516,7 @@ class ChurchInvitationForm(forms.ModelForm):
         return email
 
     def save(self, commit=True):
-        invite = super().save(commit=False)
+        invite = self.instance
         if self.church:
             invite.church = self.church
         if self.invited_by:
@@ -629,12 +580,9 @@ class InviteSignupForm(forms.ModelForm):
         return cleaned_data
 
     def save(self, commit=True):
-        user = super().save(commit=False)
-        user.email = self.invite_email
-        user.set_password(self.cleaned_data['password1'])
-        if commit:
-            user.save()
-        return user
+        if not commit:
+            raise ValueError("InviteSignupForm.save requires commit=True.")
+        return create_signup_user_from_form(form=self)
 
 
 

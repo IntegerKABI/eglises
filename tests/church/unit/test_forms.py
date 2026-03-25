@@ -1,4 +1,4 @@
-from unittest.mock import patch
+﻿from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -76,7 +76,7 @@ class ChurchFormTests(SaaSTestCase):
         )
 
         self.assertTrue(form.is_valid())
-        with patch("church.forms.ChurchMembership.objects.create", side_effect=RuntimeError("db error")):
+        with patch("church.membership_services.ChurchMembership.objects.create", side_effect=RuntimeError("db error")):
             with self.assertRaises(RuntimeError):
                 form.save(church=church)
 
@@ -94,7 +94,7 @@ class ChurchFormTests(SaaSTestCase):
         )
 
         self.assertTrue(form.is_valid())
-        with patch("church.forms.ChurchMembership.objects.create", side_effect=RuntimeError("db error")):
+        with patch("church.membership_services.ChurchMembership.objects.create", side_effect=RuntimeError("db error")):
             with self.assertRaises(RuntimeError):
                 form.save(church=church)
 
@@ -136,4 +136,5 @@ class ChurchFormTests(SaaSTestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn("invitation en attente", str(form.errors).lower())
+
 

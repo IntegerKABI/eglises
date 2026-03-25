@@ -3,10 +3,12 @@
 from dataclasses import dataclass
 import logging
 
+from django.db import transaction
 from django.urls import reverse
 
 from .audit import log_audit
 from .background_jobs import enqueue_invite_email_job
+from .models import ChurchInvitation, ChurchMembership
 from .notifications import Notification, notify_user
 from .view_helpers import _schedule_safe_after_commit
 
@@ -40,10 +42,30 @@ def _log_superadmin_church_action(*, actor, church, action, metadata=None) -> No
 
 def create_church_from_form(*, request, actor, form) -> SuperadminChurchCreateResult:
     """Create a tenant church and perform the matching onboarding side effects."""
-    church = form.save(invited_by=actor)
-    invitation = getattr(form, "created_invitation", None)
-    membership = getattr(form, "created_membership", None)
-    created_admin_user = getattr(form, "created_admin_user", None)
+    church = form.instance
+    admin_user = form.admin_user
+    membership = None
+    invitation = None
+
+    with transaction.atomic():
+        church.save()
+        if form.create_new_admin:
+            admin_user.set_password(form.cleaned_data["new_admin_password1"])
+            admin_user.is_active = True
+            admin_user.save()
+            membership = ChurchMembership.objects.create(
+                user=admin_user,
+                church=church,
+                role=ChurchMembership.Role.ADMIN,
+                is_active=True,
+            )
+        else:
+            invitation = ChurchInvitation.objects.create(
+                church=church,
+                email=admin_user.email.strip().lower(),
+                role=ChurchMembership.Role.ADMIN,
+                invited_by=actor,
+            )
 
     def after_commit() -> None:
         _log_superadmin_church_action(
@@ -60,8 +82,8 @@ def create_church_from_form(*, request, actor, form) -> SuperadminChurchCreateRe
                     action="tenant_assign_admin",
                     instance=membership,
                     metadata={
-                        "user_id": created_admin_user.pk,
-                        "username": created_admin_user.username,
+                        "user_id": admin_user.pk,
+                        "username": admin_user.username,
                     },
                 )
             except Exception:
@@ -75,7 +97,7 @@ def create_church_from_form(*, request, actor, form) -> SuperadminChurchCreateRe
                     instance=invitation,
                     metadata={
                         "email": invitation.email,
-                        "user_id": created_admin_user.pk,
+                        "user_id": admin_user.pk,
                     },
                 )
             except Exception:
@@ -86,22 +108,23 @@ def create_church_from_form(*, request, actor, form) -> SuperadminChurchCreateRe
     success_message = "Église créée avec son premier administrateur."
     if invitation is not None:
         notify_user(
-            created_admin_user,
+            admin_user,
             church,
             Notification.Category.INVITE,
             "Invitation à administrer une église",
             body=f"Vous avez été invité à administrer {church.name}.",
             link=reverse("accept_invite", args=[invitation.token]),
         )
-        invite_url = request.build_absolute_uri(reverse("accept_invite", args=[invitation.token]))
-        enqueue_invite_email_job(invitation, invite_url)
+        if request is not None:
+            invite_url = request.build_absolute_uri(reverse("accept_invite", args=[invitation.token]))
+            enqueue_invite_email_job(invitation, invite_url)
         success_message = "Église créée et invitation admin envoyée."
 
     return SuperadminChurchCreateResult(
         church=church,
         invitation=invitation,
         membership=membership,
-        created_admin_user=created_admin_user,
+        created_admin_user=admin_user,
         success_message=success_message,
     )
 

@@ -30,7 +30,12 @@ class InvitationAcceptanceResult:
 def create_invitation_from_form(*, request, actor, church, form) -> ChurchInvitation:
     """Create an invitation and emit the related tenant side effects."""
     with transaction.atomic():
-        invite = form.save()
+        invite = form.instance
+        invite.church = church
+        invite.invited_by = getattr(form, "invited_by", None) or actor
+        if invite.status == ChurchInvitation.Status.PENDING:
+            enforce_limits_for_model(church, ChurchInvitation)
+        invite.save()
         try:
             log_audit(
                 actor=actor,
@@ -66,6 +71,15 @@ def create_invitation_from_form(*, request, actor, church, form) -> ChurchInvita
         enqueue_invite_email_job(invite, invite_url)
 
     return invite
+
+
+def create_signup_user_from_form(*, form):
+    """Create the invited user account from a validated signup form."""
+    user = form.instance
+    user.email = form.invite_email
+    user.set_password(form.cleaned_data["password1"])
+    user.save()
+    return user
 
 
 def revoke_invitation(*, actor, church, invite: ChurchInvitation) -> ChurchInvitation:

@@ -1,14 +1,12 @@
-"""Membership application services for tenant user management flows."""
+﻿"""Membership application services for tenant user management flows."""
 
 from dataclasses import dataclass
 import logging
 
-from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.urls import reverse
 
 from .audit import log_audit
-from .forms import ChurchMembershipAssignForm
 from .limits import enforce_limits_for_model
 from .models import ChurchMembership
 from .notifications import notify_user_role_change
@@ -25,12 +23,56 @@ class MembershipAssignmentResult:
     created: bool
 
 
-def assign_membership_from_form(*, actor, church, form: ChurchMembershipAssignForm) -> MembershipAssignmentResult:
-    """Create or reactivate a church membership from a validated assignment form."""
+@dataclass(frozen=True)
+class ChurchUserCreationResult:
+    """Represent the outcome of creating a church-scoped user account."""
+
+    user: object
+    membership: ChurchMembership
+
+
+def create_church_user(*, actor, church, form) -> ChurchUserCreationResult:
+    """Create a user and their first membership from a validated form."""
     with transaction.atomic():
-        membership = form.save(church=church)
-        created = bool(getattr(form, "created", False))
-        action_title = "Accès accordé" if created else "Rôle mis à jour"
+        user = form.instance
+        user.set_password(form.cleaned_data["password1"])
+        enforce_limits_for_model(church, ChurchMembership)
+        user.save()
+        membership = ChurchMembership.objects.create(
+            user=user,
+            church=church,
+            role=form.cleaned_data["role"],
+            is_active=True,
+        )
+
+    return ChurchUserCreationResult(user=user, membership=membership)
+
+
+def assign_membership(*, actor, church, user, role) -> MembershipAssignmentResult:
+    """Create or reactivate a church membership for a resolved user."""
+    with transaction.atomic():
+        membership = (
+            ChurchMembership.objects.select_for_update()
+            .filter(user=user, church=church)
+            .first()
+        )
+        created = membership is None
+        if membership:
+            if not membership.is_active:
+                enforce_limits_for_model(church, ChurchMembership)
+            membership.role = role
+            membership.is_active = True
+            membership.save(update_fields=["role", "is_active"])
+        else:
+            enforce_limits_for_model(church, ChurchMembership)
+            membership = ChurchMembership.objects.create(
+                user=user,
+                church=church,
+                role=role,
+                is_active=True,
+            )
+
+        action_title = "AccÃ¨s accordÃ©" if created else "RÃ´le mis Ã  jour"
         audit_action = "membership_assign" if created else "membership_update"
 
         def after_commit() -> None:
@@ -49,7 +91,7 @@ def assign_membership_from_form(*, actor, church, form: ChurchMembershipAssignFo
                 church,
                 membership.user,
                 title=action_title,
-                body=f"Votre rôle pour {church.name} est maintenant {membership.get_role_display()}",
+                body=f"Votre rÃ´le pour {church.name} est maintenant {membership.get_role_display()}",
                 link=reverse("dashboard"),
                 actor=actor,
             )
@@ -57,6 +99,16 @@ def assign_membership_from_form(*, actor, church, form: ChurchMembershipAssignFo
         _schedule_safe_after_commit(after_commit)
 
     return MembershipAssignmentResult(membership=membership, created=created)
+
+
+def assign_membership_from_form(*, actor, church, form) -> MembershipAssignmentResult:
+    """Resolve a validated assignment form into the shared membership service."""
+    return assign_membership(
+        actor=actor,
+        church=church,
+        user=form.user,
+        role=form.cleaned_data["role"],
+    )
 
 
 def set_membership_active_state(*, actor, church, membership_id: int, is_active: bool) -> ChurchMembership:
@@ -90,8 +142,8 @@ def set_membership_active_state(*, actor, church, membership_id: int, is_active:
             notify_user_role_change(
                 church,
                 membership.user,
-                title="Statut utilisateur mis à jour",
-                body=f"Votre accès est maintenant {status_label} pour {church.name}.",
+                title="Statut utilisateur mis Ã  jour",
+                body=f"Votre accÃ¨s est maintenant {status_label} pour {church.name}.",
                 link=reverse("dashboard"),
                 actor=actor,
             )
@@ -138,8 +190,8 @@ def transfer_admin_role(*, actor, church, current_membership_id: int, target_mem
             notify_user_role_change(
                 church,
                 target.user,
-                title="Administration transférée",
-                body=f"Vous êtes maintenant administrateur de {church.name}.",
+                title="Administration transfÃ©rÃ©e",
+                body=f"Vous Ãªtes maintenant administrateur de {church.name}.",
                 link=reverse("manage_users"),
                 actor=actor,
             )
@@ -148,8 +200,8 @@ def transfer_admin_role(*, actor, church, current_membership_id: int, target_mem
                 notify_user_role_change(
                     church,
                     current_membership.user,
-                    title="Administration transférée",
-                    body=f"Votre rôle est maintenant {current_membership.get_role_display()} pour {church.name}.",
+                    title="Administration transfÃ©rÃ©e",
+                    body=f"Votre rÃ´le est maintenant {current_membership.get_role_display()} pour {church.name}.",
                     link=reverse("manage_users"),
                     actor=actor,
                 )
@@ -198,8 +250,8 @@ def update_membership(*, actor, church, membership_id: int, role: str, is_active
                 notify_user_role_change(
                     church,
                     membership.user,
-                    title="Rôle mis à jour",
-                    body=f"Rôle: {membership.get_role_display()} (statut: {status_label}).",
+                    title="RÃ´le mis Ã  jour",
+                    body=f"RÃ´le: {membership.get_role_display()} (statut: {status_label}).",
                     link=reverse("manage_users"),
                     actor=actor,
                 )
@@ -207,3 +259,4 @@ def update_membership(*, actor, church, membership_id: int, role: str, is_active
             _schedule_safe_after_commit(after_commit)
 
     return membership
+

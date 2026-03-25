@@ -1,4 +1,4 @@
-from io import StringIO
+﻿from io import StringIO
 from unittest.mock import patch
 
 from django.core import mail
@@ -134,7 +134,7 @@ class SuperAdminChurchManagementIntegrationTests(SaaSTestCase):
             email="rollback-candidate@example.com",
         )
 
-        with patch("church.forms.ChurchInvitation.objects.create", side_effect=RuntimeError("boom")):
+        with patch("church.superadmin_services.ChurchInvitation.objects.create", side_effect=RuntimeError("boom")):
             with self.assertRaises(RuntimeError):
                 self.client.post(
                     reverse("superadmin_church_create"),
@@ -267,3 +267,4 @@ class SuperAdminChurchManagementIntegrationTests(SaaSTestCase):
 
         self.assertRedirects(response, reverse("dashboard"))
         self.assertEqual(self.client.session.get("active_church_id"), church.pk)
+
