@@ -83,59 +83,8 @@ jobs:
       - name: Apply migrations
         run: python manage.py migrate --noinput --settings=eglise_saas_project.settings.test
 
-      # - name: Run browser E2E tests
-      #   run: python manage.py test tests.church.e2e --settings=eglise_saas_project.settings.test
-
       - name: Run PostgreSQL locking regression tests
         run: python manage.py test tests.church.integration.test_postgres_transactions --settings=eglise_saas_project.settings.test
 
       - name: Run full PostgreSQL test suite
         run: python manage.py test --settings=eglise_saas_project.settings.test
-
-  # test-browser:
-  #   runs-on: ubuntu-latest
-  #   services:
-  #     postgres:
-  #       image: postgres:16-alpine
-  #       env:
-  #         POSTGRES_DB: eglise_saas
-  #         POSTGRES_USER: eglise_user
-  #         POSTGRES_PASSWORD: eglise-password
-  #       ports:
-  #         - 5432:5432
-  #       options: >-
-  #         --health-cmd "pg_isready -U eglise_user -d eglise_saas"
-  #         --health-interval 10s
-  #         --health-timeout 5s
-  #         --health-retries 5
-  #   env:
-  #     DJANGO_SETTINGS_MODULE: eglise_saas_project.settings.test
-  #     DJANGO_ALLOW_ASYNC_UNSAFE: "true"
-  #     SECRET_KEY: ci-secret-key
-  #     DEBUG: "False"
-  #     ALLOWED_HOSTS: localhost,127.0.0.1,testserver
-  #     DATABASE_URL: postgresql://eglise_user:eglise-password@127.0.0.1:5432/eglise_saas
-  #     DATABASE_CONN_MAX_AGE: "600"
-  #     DATABASE_SSL_REQUIRE: "False"
-  #   steps:
-  #     - name: Check out code
-  #       uses: actions/checkout@v4
-
-  #     - name: Set up Python
-  #       uses: actions/setup-python@v5
-  #       with:
-  #         python-version: "3.12"
-
-  #     - name: Install dependencies
-  #       run: |
-  #         python -m pip install --upgrade pip
-  #         pip install -r requirements.txt
-
-  #     - name: Install Playwright browser
-  #       run: python -m playwright install --with-deps chromium
-
-  #     - name: Apply migrations
-  #       run: python manage.py migrate --noinput --settings=eglise_saas_project.settings.test
-
-  #     - name: Run browser E2E tests
-  #       run: python manage.py test tests.church.e2e --settings=eglise_saas_project.settings.test
