@@ -6,8 +6,9 @@ import logging
 from django.urls import reverse
 
 from .audit import log_audit
+from .background_jobs import enqueue_invite_email_job
 from .notifications import Notification, notify_user
-from .view_helpers import _enqueue_invite_email_delivery, _schedule_safe_after_commit
+from .view_helpers import _schedule_safe_after_commit
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,8 @@ def create_church_from_form(*, request, actor, form) -> SuperadminChurchCreateRe
             body=f"Vous avez été invité à administrer {church.name}.",
             link=reverse("accept_invite", args=[invitation.token]),
         )
-        _enqueue_invite_email_delivery(request, invitation)
+        invite_url = request.build_absolute_uri(reverse("accept_invite", args=[invitation.token]))
+        enqueue_invite_email_job(invitation, invite_url)
         success_message = "Église créée et invitation admin envoyée."
 
     return SuperadminChurchCreateResult(

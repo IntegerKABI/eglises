@@ -10,13 +10,11 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .audit import log_audit
+from .background_jobs import enqueue_invite_email_job
 from .limits import enforce_limits_for_model
 from .models import ChurchInvitation, ChurchMembership
 from .notifications import notify_church_admins, notify_user
-from .view_helpers import (
-    _enqueue_invite_email_delivery,
-    _mark_invite_notifications_read,
-)
+from .view_helpers import _mark_invite_notifications_read
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +62,8 @@ def create_invitation_from_form(*, request, actor, church, form) -> ChurchInvita
                 link=reverse("accept_invite", args=[invite.token]),
             )
 
-        _enqueue_invite_email_delivery(request, invite)
+        invite_url = request.build_absolute_uri(reverse("accept_invite", args=[invite.token]))
+        enqueue_invite_email_job(invite, invite_url)
 
     return invite
 
@@ -119,7 +118,8 @@ def resend_invitation(*, request, actor, church, invite: ChurchInvitation) -> Ch
         except Exception:
             logger.error("Failed to log invite resend action", exc_info=True)
 
-        _enqueue_invite_email_delivery(request, invite)
+        invite_url = request.build_absolute_uri(reverse("accept_invite", args=[invite.token]))
+        enqueue_invite_email_job(invite, invite_url)
 
         notify_church_admins(
             church,

@@ -18,7 +18,6 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .audit import log_audit
-from .background_jobs import enqueue_invite_email_job
 from .limits import enforce_limits_for_model
 from .membership_policy import get_pending_invitations_for_user
 from .models import Church, ChurchInvitation, ChurchMembership, Notification
@@ -188,37 +187,6 @@ def ajax_form_error_response(form, *, message="Veuillez corriger les erreurs du 
         errors=errors,
         http_status=http_status,
     )
-
-
-def _build_invite_url(request, invite):
-    return request.build_absolute_uri(reverse('accept_invite', args=[invite.token]))
-
-
-def _send_invite_email(invite_url, invite):
-    subject = f"Invitation à rejoindre {invite.church.name}"
-    message = (
-        f"Bonjour,\n\n"
-        f"Vous avez été invité à rejoindre {invite.church.name} en tant que {invite.get_role_display()}.\n"
-        f"Pour accepter l'invitation, cliquez ici : {invite_url}\n\n"
-        f"Cette invitation expirera le {invite.expires_at:%d/%m/%Y %H:%M}.\n"
-    )
-    send_mail(
-        subject,
-        message,
-        settings.DEFAULT_FROM_EMAIL or settings.EMAIL_HOST_USER,
-        [invite.email],
-        fail_silently=False,
-    )
-
-
-def _enqueue_invite_email_delivery(request, invite):
-    """Persist an invitation email job so it can be delivered by a worker."""
-    return enqueue_invite_email_job(invite, _build_invite_url(request, invite))
-
-
-def _send_invite_email(invite_url, invite):
-    """Queue invitation delivery through the durable background job store."""
-    return enqueue_invite_email_job(invite, invite_url)
 
 
 def _mark_invite_notifications_read(user, invite):
