@@ -1,3 +1,5 @@
+"""Versioned cache helpers for public church pages."""
+
 from functools import wraps
 from uuid import uuid4
 
@@ -56,23 +58,22 @@ def bump_site_cache_version():
 
 def cache_public_view(key_prefix_func):
     """
-    Cache a public view indefinitely using versioned keys.
-    Automatically bypassed if user is authenticated or query params (search) exist.
+    Cache a public view with versioned keys while bypassing authenticated or filtered requests.
     """
     def decorator(view_func):
         @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):
             if request.GET or request.user.is_authenticated:
                 return view_func(request, *args, **kwargs)
-            
+
             cache_key = key_prefix_func(request, *args, **kwargs)
             response = cache.get(cache_key)
             if response:
                 return response
-                
+
             response = view_func(request, *args, **kwargs)
             if hasattr(response, 'status_code') and response.status_code == 200:
-                cache.set(cache_key, response, timeout=60*60*24*30) # 30 Days
+                cache.set(cache_key, response, timeout=60 * 60 * 24 * 30)  # Keep public pages warm for a month.
             return response
         return _wrapped_view
     return decorator

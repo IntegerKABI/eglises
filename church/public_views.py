@@ -1,12 +1,9 @@
 """Public-facing views and invitation flows."""
 
 from datetime import timedelta
-import logging
 
 from django.conf import settings
 from django.contrib import messages
-
-logger = logging.getLogger(__name__)
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError

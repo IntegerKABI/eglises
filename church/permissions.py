@@ -1,3 +1,5 @@
+"""Capability and access helpers for tenant and platform authorization."""
+
 from functools import wraps
 
 from django.contrib import messages
@@ -34,7 +36,7 @@ ALL_CAPABILITIES = {
     CAP_VIEW_AUDIT,
 }
 
-# Tenant role policy:
+# Tenant role policy.
 # - admin: full church administration except platform settings
 # - staff: content and member operations inside the tenant
 # - secretary: office workflow (messages, members, events, sermons)
@@ -58,6 +60,7 @@ ROLE_CAPABILITIES = {
 
 
 def get_capabilities_for_user(user, membership):
+    """Return the capability set that applies to a user in the current church."""
     if user.is_superuser:
         return set(ALL_CAPABILITIES)
     if not membership:
@@ -66,6 +69,7 @@ def get_capabilities_for_user(user, membership):
 
 
 def get_capabilities_for_request(request):
+    """Resolve the current request context into the caller's capability set."""
     church = getattr(request, "current_church", None)
     if church is None and request.user.is_authenticated:
         church = get_selected_church(request, prefetch_pages=True)
@@ -80,6 +84,7 @@ def get_capabilities_for_request(request):
 
 
 def _roles_for_capability(capability):
+    """Return the tenant roles that can perform a given capability."""
     return [
         role
         for role, capabilities in ROLE_CAPABILITIES.items()
@@ -88,6 +93,7 @@ def _roles_for_capability(capability):
 
 
 def get_churches_for_capability(user, capability):
+    """Return the churches visible to a user for a specific capability."""
     if not user.is_authenticated:
         return Church.objects.none()
     if user.is_superuser:
@@ -110,6 +116,7 @@ def get_churches_for_capability(user, capability):
 
 
 def user_has_any_capability(user, capability):
+    """Report whether the user can use a capability in at least one church."""
     if not user.is_authenticated:
         return False
     if capability == CAP_SWITCH_CHURCH:
@@ -120,6 +127,7 @@ def user_has_any_capability(user, capability):
 
 
 def _redirect_without_church(request):
+    """Send the user to the right fallback when no active church is available."""
     if request.user.is_superuser:
         messages.warning(request, "Selectionnez une eglise pour continuer.")
         return redirect("select_church")
@@ -140,6 +148,7 @@ def _redirect_without_church(request):
 
 
 def require_capability(capability):
+    """Wrap a view so it only executes when the caller has the requested capability."""
     def decorator(view_func):
         @wraps(view_func)
         def wrapped(request, *args, **kwargs):
