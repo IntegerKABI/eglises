@@ -150,7 +150,7 @@ Le projet est PostgreSQL uniquement. En pratique :
 
 - si `DATABASE_URL` est défini, Django l'utilise
 - sinon, si `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` et `POSTGRES_HOST` sont définis, Django utilise PostgreSQL
-- sinon, le chargement de la configuration l'?ve une erreur explicite
+- sinon, le chargement de la configuration lève une erreur explicite
 
 ### Variables de base
 
