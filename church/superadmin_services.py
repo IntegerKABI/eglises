@@ -1,19 +1,15 @@
 """Superadmin application services for tenant lifecycle management."""
 
 from dataclasses import dataclass
-import logging
 
 from django.db import transaction
 from django.urls import reverse
 
-from .audit import log_audit
+from .audit import log_audit_safely
 from .background_jobs import enqueue_invite_email_job
 from .models import ChurchInvitation, ChurchMembership
 from .notifications import Notification, notify_user
 from .view_helpers import _schedule_safe_after_commit
-
-logger = logging.getLogger(__name__)
-
 
 @dataclass(frozen=True)
 class SuperadminChurchCreateResult:
@@ -28,16 +24,14 @@ class SuperadminChurchCreateResult:
 
 def _log_superadmin_church_action(*, actor, church, action, metadata=None) -> None:
     """Write a superadmin church audit entry and log failures."""
-    try:
-        log_audit(
-            actor=actor,
-            church=church,
-            action=action,
-            instance=church,
-            metadata=metadata or {},
-        )
-    except Exception:
-        logger.error("Failed to log superadmin church action", exc_info=True)
+    log_audit_safely(
+        actor=actor,
+        church=church,
+        action=action,
+        instance=church,
+        metadata=metadata or {},
+        error_message="Failed to log superadmin church action",
+    )
 
 
 def create_church_from_form(*, request, actor, form) -> SuperadminChurchCreateResult:
@@ -75,33 +69,29 @@ def create_church_from_form(*, request, actor, form) -> SuperadminChurchCreateRe
             metadata={"status": church.status, "plan": church.plan},
         )
         if membership is not None:
-            try:
-                log_audit(
-                    actor=actor,
-                    church=church,
-                    action="tenant_assign_admin",
-                    instance=membership,
-                    metadata={
-                        "user_id": admin_user.pk,
-                        "username": admin_user.username,
-                    },
-                )
-            except Exception:
-                logger.error("Failed to log tenant admin assignment action", exc_info=True)
+            log_audit_safely(
+                actor=actor,
+                church=church,
+                action="tenant_assign_admin",
+                instance=membership,
+                metadata={
+                    "user_id": admin_user.pk,
+                    "username": admin_user.username,
+                },
+                error_message="Failed to log tenant admin assignment action",
+            )
         if invitation is not None:
-            try:
-                log_audit(
-                    actor=actor,
-                    church=church,
-                    action="tenant_invite_admin",
-                    instance=invitation,
-                    metadata={
-                        "email": invitation.email,
-                        "user_id": admin_user.pk,
-                    },
-                )
-            except Exception:
-                logger.error("Failed to log tenant admin invitation action", exc_info=True)
+            log_audit_safely(
+                actor=actor,
+                church=church,
+                action="tenant_invite_admin",
+                instance=invitation,
+                metadata={
+                    "email": invitation.email,
+                    "user_id": admin_user.pk,
+                },
+                error_message="Failed to log tenant admin invitation action",
+            )
 
     _schedule_safe_after_commit(after_commit)
 

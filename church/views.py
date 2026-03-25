@@ -9,7 +9,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-from .audit import log_audit
+from .audit import log_audit_safely
 from .forms import (
     ChurchForm,
     ChurchInvitationForm,
@@ -155,16 +155,14 @@ def church_settings(request):
                 form.add_error(None, exc)
             else:
                 form.save()
-                try:
-                    log_audit(
-                        actor=request.user,
-                        church=church,
-                        action="settings_update",
-                        instance=church,
-                        metadata={"section": "church_settings"},
-                    )
-                except Exception:
-                    logger.error("Failed to log settings_update action", exc_info=True)
+                log_audit_safely(
+                    actor=request.user,
+                    church=church,
+                    action="settings_update",
+                    instance=church,
+                    metadata={"section": "church_settings"},
+                    error_message="Failed to log settings_update action",
+                )
                 if is_ajax(request):
                     return ajax_success_response(
                         message='Paramètres mis à jour avec succès !',
@@ -480,18 +478,16 @@ def add_user(request):
                     role = form.cleaned_data['role']
 
                     def after_commit():
-                        try:
-                            log_audit(
-                                actor=request.user,
-                                church=church,
-                                action="membership_create",
-                                object_type="ChurchMembership",
-                                object_id=str(user.pk),
-                                object_repr=str(user),
-                                metadata={"role": role},
-                            )
-                        except Exception:
-                            logger.error("Failed to log membership_create action", exc_info=True)
+                        log_audit_safely(
+                            actor=request.user,
+                            church=church,
+                            action="membership_create",
+                            object_type="ChurchMembership",
+                            object_id=str(user.pk),
+                            object_repr=str(user),
+                            metadata={"role": role},
+                            error_message="Failed to log membership_create action",
+                        )
                         notify_user_role_change(
                             church,
                             user,

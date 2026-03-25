@@ -1,7 +1,6 @@
 """Invitation application services for tenant onboarding workflows."""
 
 from dataclasses import dataclass
-import logging
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -9,15 +8,12 @@ from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
 
-from .audit import log_audit
+from .audit import log_audit_safely
 from .background_jobs import enqueue_invite_email_job
 from .limits import enforce_limits_for_model
 from .models import ChurchInvitation, ChurchMembership
 from .notifications import notify_church_admins, notify_user
 from .view_helpers import _mark_invite_notifications_read
-
-logger = logging.getLogger(__name__)
-
 
 @dataclass(frozen=True)
 class InvitationAcceptanceResult:
@@ -36,16 +32,14 @@ def create_invitation_from_form(*, request, actor, church, form) -> ChurchInvita
         if invite.status == ChurchInvitation.Status.PENDING:
             enforce_limits_for_model(church, ChurchInvitation)
         invite.save()
-        try:
-            log_audit(
-                actor=actor,
-                church=church,
-                action="invite_create",
-                instance=invite,
-                metadata={"email": invite.email, "role": invite.role},
-            )
-        except Exception:
-            logger.error("Failed to log invite creation action", exc_info=True)
+        log_audit_safely(
+            actor=actor,
+            church=church,
+            action="invite_create",
+            instance=invite,
+            metadata={"email": invite.email, "role": invite.role},
+            error_message="Failed to log invite creation action",
+        )
 
         notify_church_admins(
             church,
@@ -88,16 +82,14 @@ def revoke_invitation(*, actor, church, invite: ChurchInvitation) -> ChurchInvit
         invite.status = ChurchInvitation.Status.REVOKED
         invite.save(update_fields=["status"])
 
-        try:
-            log_audit(
-                actor=actor,
-                church=church,
-                action="invite_revoke",
-                instance=invite,
-                metadata={"email": invite.email},
-            )
-        except Exception:
-            logger.error("Failed to log invite revoke action", exc_info=True)
+        log_audit_safely(
+            actor=actor,
+            church=church,
+            action="invite_revoke",
+            instance=invite,
+            metadata={"email": invite.email},
+            error_message="Failed to log invite revoke action",
+        )
 
         invited_user = get_user_model().objects.filter(email__iexact=invite.email).first()
         if invited_user:
@@ -121,16 +113,14 @@ def resend_invitation(*, request, actor, church, invite: ChurchInvitation) -> Ch
         invite.expires_at = timezone.now() + timedelta(days=7)
         invite.save(update_fields=["expires_at"])
 
-        try:
-            log_audit(
-                actor=actor,
-                church=church,
-                action="invite_resend",
-                instance=invite,
-                metadata={"email": invite.email},
-            )
-        except Exception:
-            logger.error("Failed to log invite resend action", exc_info=True)
+        log_audit_safely(
+            actor=actor,
+            church=church,
+            action="invite_resend",
+            instance=invite,
+            metadata={"email": invite.email},
+            error_message="Failed to log invite resend action",
+        )
 
         invite_url = request.build_absolute_uri(reverse("accept_invite", args=[invite.token]))
         enqueue_invite_email_job(invite, invite_url)
@@ -179,16 +169,14 @@ def accept_invitation(*, actor, invite: ChurchInvitation) -> InvitationAcceptanc
         invite.accepted_by = actor
         invite.save(update_fields=["status", "accepted_at", "accepted_by"])
 
-        try:
-            log_audit(
-                actor=actor,
-                church=invite.church,
-                action="invite_accept",
-                instance=invite,
-                metadata={"email": invite.email, "role": invite.role},
-            )
-        except Exception:
-            logger.error("Failed to log invite acceptance action", exc_info=True)
+        log_audit_safely(
+            actor=actor,
+            church=invite.church,
+            action="invite_accept",
+            instance=invite,
+            metadata={"email": invite.email, "role": invite.role},
+            error_message="Failed to log invite acceptance action",
+        )
 
         notify_church_admins(
             invite.church,

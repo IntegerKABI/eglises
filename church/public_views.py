@@ -19,7 +19,7 @@ from django.urls import reverse
 from django.utils import timezone
 from .cache import cache_public_view, get_church_cache_version
 
-from .audit import log_audit
+from .audit import log_audit_safely
 from .background_jobs import enqueue_contact_email_job
 from .forms import ContactForm, InviteSignupForm
 from .invitation_services import accept_invitation
@@ -339,16 +339,14 @@ def decline_invite(request, token):
     invite.declined_at = timezone.now()
     invite.save(update_fields=['status', 'declined_at'])
     _mark_invite_notifications_read(request.user, invite)
-    try:
-        log_audit(
-            actor=request.user,
-            church=invite.church,
-            action="invite_decline",
-            instance=invite,
-            metadata={"email": invite.email, "role": invite.role},
-        )
-    except Exception:
-        logger.error("Failed to log invite_decline action", exc_info=True)
+    log_audit_safely(
+        actor=request.user,
+        church=invite.church,
+        action="invite_decline",
+        instance=invite,
+        metadata={"email": invite.email, "role": invite.role},
+        error_message="Failed to log invite_decline action",
+    )
     notify_church_admins(
         invite.church,
         category="invite",

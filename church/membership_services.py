@@ -1,19 +1,15 @@
 ﻿"""Membership application services for tenant user management flows."""
 
 from dataclasses import dataclass
-import logging
 
 from django.db import transaction
 from django.urls import reverse
 
-from .audit import log_audit
+from .audit import log_audit_safely
 from .limits import enforce_limits_for_model
 from .models import ChurchMembership
 from .notifications import notify_user_role_change
 from .view_helpers import _schedule_safe_after_commit
-
-logger = logging.getLogger(__name__)
-
 
 @dataclass(frozen=True)
 class MembershipAssignmentResult:
@@ -76,16 +72,14 @@ def assign_membership(*, actor, church, user, role) -> MembershipAssignmentResul
         audit_action = "membership_assign" if created else "membership_update"
 
         def after_commit() -> None:
-            try:
-                log_audit(
-                    actor=actor,
-                    church=church,
-                    action=audit_action,
-                    instance=membership,
-                    metadata={"role": membership.role},
-                )
-            except Exception:
-                logger.error("Failed to log membership assignment action", exc_info=True)
+            log_audit_safely(
+                actor=actor,
+                church=church,
+                action=audit_action,
+                instance=membership,
+                metadata={"role": membership.role},
+                error_message="Failed to log membership assignment action",
+            )
 
             notify_user_role_change(
                 church,
@@ -128,16 +122,14 @@ def set_membership_active_state(*, actor, church, membership_id: int, is_active:
         status_label = "actif" if membership.is_active else "inactif"
 
         def after_commit() -> None:
-            try:
-                log_audit(
-                    actor=actor,
-                    church=church,
-                    action="membership_status",
-                    instance=membership,
-                    metadata={"active": membership.is_active},
-                )
-            except Exception:
-                logger.error("Failed to log membership status action", exc_info=True)
+            log_audit_safely(
+                actor=actor,
+                church=church,
+                action="membership_status",
+                instance=membership,
+                metadata={"active": membership.is_active},
+                error_message="Failed to log membership status action",
+            )
 
             notify_user_role_change(
                 church,
@@ -176,16 +168,14 @@ def transfer_admin_role(*, actor, church, current_membership_id: int, target_mem
             current_membership.save(update_fields=["role"])
 
         def after_commit() -> None:
-            try:
-                log_audit(
-                    actor=actor,
-                    church=church,
-                    action="membership_transfer_admin",
-                    instance=target,
-                    metadata={"from_user": current_membership.user_id},
-                )
-            except Exception:
-                logger.error("Failed to log admin transfer action", exc_info=True)
+            log_audit_safely(
+                actor=actor,
+                church=church,
+                action="membership_transfer_admin",
+                instance=target,
+                metadata={"from_user": current_membership.user_id},
+                error_message="Failed to log admin transfer action",
+            )
 
             notify_user_role_change(
                 church,
@@ -233,19 +223,17 @@ def update_membership(*, actor, church, membership_id: int, role: str, is_active
             status_label = "actif" if membership.is_active else "inactif"
 
             def after_commit() -> None:
-                try:
-                    log_audit(
-                        actor=actor,
-                        church=church,
-                        action="membership_update",
-                        instance=membership,
-                        metadata={
-                            "role": membership.role,
-                            "active": membership.is_active,
-                        },
-                    )
-                except Exception:
-                    logger.error("Failed to log membership update action", exc_info=True)
+                log_audit_safely(
+                    actor=actor,
+                    church=church,
+                    action="membership_update",
+                    instance=membership,
+                    metadata={
+                        "role": membership.role,
+                        "active": membership.is_active,
+                    },
+                    error_message="Failed to log membership update action",
+                )
 
                 notify_user_role_change(
                     church,

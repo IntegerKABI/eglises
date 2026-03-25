@@ -1,4 +1,8 @@
+import logging
+
 from .models import AuditLog
+
+logger = logging.getLogger(__name__)
 
 
 def log_audit(*, actor, church, action, instance=None, object_type=None, object_id=None, object_repr=None, metadata=None):
@@ -15,3 +19,11 @@ def log_audit(*, actor, church, action, instance=None, object_type=None, object_
         object_repr=object_repr or '',
         metadata=metadata or {},
     )
+
+
+def log_audit_safely(*, error_message: str, **kwargs):
+    """Record an audit entry and keep the caller free from repetitive error handling."""
+    try:
+        log_audit(**kwargs)
+    except Exception:
+        logger.error(error_message, exc_info=True)

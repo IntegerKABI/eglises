@@ -10,7 +10,7 @@ from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 
-from .audit import log_audit
+from .audit import log_audit_safely
 from .forms import SiteSettingsForm
 from .limits import filter_notifications_for_retention
 from .models import AuditLog, Notification, SiteSettings
@@ -157,16 +157,14 @@ def site_settings(request):
         form = SiteSettingsForm(request.POST, request.FILES, instance=settings_obj)
         if form.is_valid():
             form.save()
-            try:
-                log_audit(
-                    actor=request.user,
-                    church=None,
-                    action="settings_update",
-                    instance=settings_obj,
-                    metadata={"section": "site_settings"},
-                )
-            except Exception:
-                logger.error("Failed to log site settings update action", exc_info=True)
+            log_audit_safely(
+                actor=request.user,
+                church=None,
+                action="settings_update",
+                instance=settings_obj,
+                metadata={"section": "site_settings"},
+                error_message="Failed to log site settings update action",
+            )
             if is_ajax(request):
                 return ajax_success_response(
                     message='Paramètres de la plateforme mis à jour !',

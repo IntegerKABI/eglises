@@ -1,18 +1,14 @@
 """Church-scoped form orchestration helpers for dashboard views."""
 
-import logging
-
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
 
-from .audit import log_audit
+from .audit import log_audit_safely
 from .church_context import _require_church
 from .limits import enforce_limits_for_model
 from .http_helpers import ajax_form_error_response, ajax_success_response, is_ajax
-
-logger = logging.getLogger(__name__)
 
 
 def _handle_church_form(
@@ -68,17 +64,15 @@ def _handle_church_form(
             obj.save()
             if hasattr(form, 'save_m2m'):
                 form.save_m2m()
-            try:
-                action = "create" if is_created else "update"
-                log_audit(
-                    actor=request.user,
-                    church=church if hasattr(obj, 'church_id') else None,
-                    action=action,
-                    instance=obj,
-                    metadata={"form": form.__class__.__name__},
-                )
-            except Exception:
-                logger.error(f"Failed to log audit for action {action}", exc_info=True)
+            action = "create" if is_created else "update"
+            log_audit_safely(
+                actor=request.user,
+                church=church if hasattr(obj, 'church_id') else None,
+                action=action,
+                instance=obj,
+                metadata={"form": form.__class__.__name__},
+                error_message=f"Failed to log audit for action {action}",
+            )
             if after_save:
                 after_save(obj, is_created)
             if is_ajax(request):
@@ -113,15 +107,13 @@ def _handle_church_delete(request, model, pk, success_message, success_url_name,
     if request.method == 'POST':
         if after_delete:
             after_delete(obj)
-        try:
-            log_audit(
-                actor=request.user,
-                church=church,
-                action="delete",
-                instance=obj,
-            )
-        except Exception:
-            logger.error("Failed to log audit for delete action", exc_info=True)
+        log_audit_safely(
+            actor=request.user,
+            church=church,
+            action="delete",
+            instance=obj,
+            error_message="Failed to log audit for delete action",
+        )
         obj.delete()
         if is_ajax(request):
             return ajax_success_response(
