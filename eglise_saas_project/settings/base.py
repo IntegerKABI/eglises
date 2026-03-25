@@ -235,6 +235,7 @@ RATE_LIMITS = {
 
 LOG_LEVEL = _env_log_level("LOG_LEVEL", default="DEBUG" if DEBUG else "INFO")
 DJANGO_LOG_LEVEL = _env_log_level("DJANGO_LOG_LEVEL", default="INFO")
+DJANGO_SERVER_LOG_LEVEL = _env_log_level("DJANGO_SERVER_LOG_LEVEL", default="ERROR")
 CHURCH_LOG_LEVEL = _env_log_level("CHURCH_LOG_LEVEL", default=LOG_LEVEL)
 BACKGROUND_JOBS_LOG_LEVEL = _env_log_level("BACKGROUND_JOBS_LOG_LEVEL", default=LOG_LEVEL)
 
@@ -265,6 +266,11 @@ LOGGING = {
         "django": {
             "handlers": ["console"],
             "level": DJANGO_LOG_LEVEL,
+            "propagate": False,
+        },
+        "django.server": {
+            "handlers": ["console"],
+            "level": DJANGO_SERVER_LOG_LEVEL,
             "propagate": False,
         },
         "church": {
