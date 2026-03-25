@@ -4,7 +4,6 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Prefetch, Q
-from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -31,6 +30,8 @@ from .superadmin_services import (
 )
 from .view_helpers import (
     _querystring_without_page,
+    ajax_form_error_response,
+    ajax_success_response,
     is_ajax,
 )
 
@@ -232,7 +233,7 @@ def superadmin_church_create(request):
                 message = build_rate_limit_message(throttle_result.retry_after_seconds)
                 form.add_error(None, message)
                 if is_ajax(request):
-                    return JsonResponse({'success': False, 'message': message, 'errors': form.errors}, status=429)
+                    return ajax_form_error_response(form, message=message, code="rate_limited", http_status=429)
                 return render(
                     request,
                     'admin_dashboard/superadmin/church_form.html',
@@ -249,17 +250,15 @@ def superadmin_church_create(request):
             success_message = result.success_message
 
             if is_ajax(request):
-                return JsonResponse(
-                    {
-                        'success': True,
-                        'message': success_message,
-                        'redirect': reverse('superadmin_church_detail', args=[church.pk]),
-                    }
+                return ajax_success_response(
+                    message=success_message,
+                    code="tenant_created",
+                    redirect=reverse('superadmin_church_detail', args=[church.pk]),
                 )
             messages.success(request, success_message)
             return redirect('superadmin_church_detail', pk=church.pk)
         if is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+            return ajax_form_error_response(form)
     else:
         form = SuperAdminChurchCreateForm()
 
@@ -286,17 +285,15 @@ def superadmin_church_edit(request, pk):
             church = update_church_profile_from_form(actor=request.user, form=form)
 
             if is_ajax(request):
-                return JsonResponse(
-                    {
-                        'success': True,
-                        'message': "Profil de l'eglise mis a jour.",
-                        'redirect': reverse('superadmin_church_detail', args=[church.pk]),
-                    }
+                return ajax_success_response(
+                    message="Profil de l'église mis à jour.",
+                    code="tenant_profile_updated",
+                    redirect=reverse('superadmin_church_detail', args=[church.pk]),
                 )
-            messages.success(request, "Profil de l'eglise mis a jour.")
+            messages.success(request, "Profil de l'église mis à jour.")
             return redirect('superadmin_church_detail', pk=church.pk)
         if is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+            return ajax_form_error_response(form)
     else:
         form = SuperAdminChurchUpdateForm(instance=managed_church)
 
@@ -328,17 +325,15 @@ def superadmin_church_status(request, pk):
             )
 
             if is_ajax(request):
-                return JsonResponse(
-                    {
-                        'success': True,
-                        'message': "Statut de l'eglise mis a jour.",
-                        'redirect': reverse('superadmin_church_detail', args=[church.pk]),
-                    }
+                return ajax_success_response(
+                    message="Statut de l'église mis à jour.",
+                    code="tenant_status_updated",
+                    redirect=reverse('superadmin_church_detail', args=[church.pk]),
                 )
-            messages.success(request, "Statut de l'eglise mis a jour.")
+            messages.success(request, "Statut de l'église mis à jour.")
             return redirect('superadmin_church_detail', pk=church.pk)
         if is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+            return ajax_form_error_response(form)
     else:
         form = SuperAdminChurchStatusForm(instance=managed_church)
 
@@ -368,17 +363,15 @@ def superadmin_church_plan(request, pk):
             )
 
             if is_ajax(request):
-                return JsonResponse(
-                    {
-                        'success': True,
-                        'message': "Plan et limites mis a jour.",
-                        'redirect': reverse('superadmin_church_detail', args=[church.pk]),
-                    }
+                return ajax_success_response(
+                    message="Plan et limites mis à jour.",
+                    code="tenant_plan_updated",
+                    redirect=reverse('superadmin_church_detail', args=[church.pk]),
                 )
-            messages.success(request, "Plan et limites mis a jour.")
+            messages.success(request, "Plan et limites mis à jour.")
             return redirect('superadmin_church_detail', pk=church.pk)
         if is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+            return ajax_form_error_response(form)
     else:
         form = SuperAdminChurchPlanForm(instance=managed_church)
 

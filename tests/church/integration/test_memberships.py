@@ -112,14 +112,14 @@ class MembershipIntegrationTests(SaaSTestCase):
         current_membership = ChurchMembership.objects.get(user=self.admin, church=self.church)
         target_membership.refresh_from_db()
         self.assertEqual(response.status_code, 200)
-        self.assertJSONEqual(
-            response.content,
-            {
-                "success": True,
-                "message": "Administrateur transféré.",
-                "redirect": reverse("manage_users"),
-            },
-        )
+        payload = response.json()
+        self.assertEqual(payload["status"], "success")
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["code"], "admin_transferred")
+        self.assertEqual(payload["message"], "Administrateur transféré.")
+        self.assertEqual(payload["redirect"], reverse("manage_users"))
+        self.assertEqual(payload["data"], {})
+        self.assertEqual(payload["errors"], {})
         self.assertEqual(current_membership.role, ChurchMembership.Role.STAFF)
         self.assertEqual(target_membership.role, ChurchMembership.Role.ADMIN)
 
@@ -176,4 +176,3 @@ class MembershipIntegrationTests(SaaSTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(church.status, Church.Status.DRAFT)
         self.assertContains(response, "Une eglise active doit avoir au moins un administrateur actif.")
-

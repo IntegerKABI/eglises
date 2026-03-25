@@ -1,4 +1,4 @@
-﻿from datetime import timedelta
+from datetime import timedelta
 from io import StringIO
 
 from django.core import mail
@@ -245,7 +245,14 @@ class PublicViewIntegrationTests(SaaSTestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["success"], True)
+        payload = response.json()
+        self.assertEqual(payload["status"], "success")
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["code"], "contact_message_sent")
+        self.assertEqual(payload["message"], "Votre message a été envoyé avec succès !")
+        self.assertEqual(payload["data"], {})
+        self.assertEqual(payload["errors"], {})
+        self.assertIsNone(payload["redirect"])
         self.assertTrue(ContactMessage.objects.filter(church=church, sender_email="ajax@example.com").exists())
         recipients = set(Notification.objects.filter(church=church).values_list("recipient_id", flat=True))
         self.assertEqual(recipients, {secretary.pk})
@@ -284,7 +291,3 @@ class PublicViewIntegrationTests(SaaSTestCase):
         self.assertEqual(ContactMessage.objects.filter(church=church).count(), 1)
         self.assertContains(second_response, "Trop de tentatives")
         self.assertEqual(ContactMessage.objects.filter(church=church).count(), 1)
-
-
-
-

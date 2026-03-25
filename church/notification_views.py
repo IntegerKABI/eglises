@@ -7,7 +7,6 @@ from django.contrib import messages
 logger = logging.getLogger(__name__)
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 
@@ -17,7 +16,15 @@ from .limits import filter_notifications_for_retention
 from .models import AuditLog, Notification, SiteSettings
 from .permissions import CAP_MANAGE_SITE_SETTINGS, CAP_VIEW_AUDIT, CAP_VIEW_DASHBOARD, get_churches_for_capability, require_capability
 from .tenancy import get_accessible_churches, get_selected_church
-from .view_helpers import _get_choice_param, _get_text_param, _querystring_without_page, _require_church, is_ajax
+from .view_helpers import (
+    _get_choice_param,
+    _get_text_param,
+    _querystring_without_page,
+    _require_church,
+    ajax_form_error_response,
+    ajax_success_response,
+    is_ajax,
+)
 
 
 @login_required
@@ -157,11 +164,14 @@ def site_settings(request):
             except Exception:
                 logger.error("Failed to log site settings update action", exc_info=True)
             if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Paramètres de la plateforme mis à jour !'})
+                return ajax_success_response(
+                    message='Paramètres de la plateforme mis à jour !',
+                    code="site_settings_updated",
+                )
             messages.success(request, 'Paramètres de la plateforme mis à jour !')
             return redirect('site_settings')
         elif is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+            return ajax_form_error_response(form)
     else:
         form = SiteSettingsForm(instance=settings_obj)
 

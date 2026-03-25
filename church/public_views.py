@@ -13,7 +13,6 @@ from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
-from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from django.urls import reverse
@@ -40,6 +39,7 @@ from .rate_limits import (
 )
 from .tenancy import get_accessible_churches
 from .view_helpers import _get_choice_param, _get_public_church, _get_text_param, _has_pending_invitations, _mark_invite_notifications_read, _parse_bool_param, _querystring_without_page, is_ajax
+from .view_helpers import ajax_error_response, ajax_form_error_response, ajax_success_response
 
 
 def _home_key(request):
@@ -178,7 +178,11 @@ def church_contact(request, church_slug):
         if throttle_result.limited:
             message = build_rate_limit_message(throttle_result.retry_after_seconds)
             if is_ajax(request):
-                return JsonResponse({'success': False, 'message': message}, status=429)
+                return ajax_error_response(
+                    message=message,
+                    code="rate_limited",
+                    http_status=429,
+                )
             messages.error(request, message)
             return redirect('church_contact', church_slug=church_slug)
         form = ContactForm(request.POST)
@@ -216,11 +220,14 @@ def church_contact(request, church_slug):
                         ),
                     )
             if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Votre message a été envoyé avec succès !'})
+                return ajax_success_response(
+                    message='Votre message a été envoyé avec succès !',
+                    code="contact_message_sent",
+                )
             messages.success(request, 'Votre message a été envoyé avec succès !')
             return redirect('church_contact', church_slug=church_slug)
         elif is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+            return ajax_form_error_response(form)
     else:
         form = ContactForm()
 

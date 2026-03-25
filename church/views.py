@@ -8,7 +8,6 @@ from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
-from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -110,6 +109,9 @@ from .view_helpers import (
     _querystring_without_page,
     _require_church,
     _schedule_safe_after_commit,
+    ajax_error_response,
+    ajax_form_error_response,
+    ajax_success_response,
     is_ajax,
 )
 
@@ -224,11 +226,14 @@ def church_settings(request):
                 except Exception:
                     logger.error("Failed to log settings_update action", exc_info=True)
                 if is_ajax(request):
-                    return JsonResponse({'success': True, 'message': 'Paramètres mis à jour avec succès !'})
+                    return ajax_success_response(
+                        message='Paramètres mis à jour avec succès !',
+                        code="church_settings_updated",
+                    )
                 messages.success(request, 'Paramètres mis à jour avec succès !')
                 return redirect('church_settings')
         elif is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+            return ajax_form_error_response(form)
     else:
         form = ChurchForm(instance=church)
 
@@ -665,8 +670,8 @@ def add_user(request):
                         notify_user_role_change(
                             church,
                             user,
-                            title="Acc?s accord?",
-                            body=f"Vous avez ?t? ajout?(e) comme {role} pour {church.name}.",
+                            title="Accès accordé",
+                            body=f"Vous avez été ajouté(e) comme {role} pour {church.name}.",
                             link=reverse('dashboard'),
                             actor=request.user,
                         )
@@ -676,11 +681,15 @@ def add_user(request):
                 form.add_error(None, exc)
             else:
                 if is_ajax(request):
-                    return JsonResponse({'success': True, 'message': 'Utilisateur cr?? !', 'redirect': reverse('manage_users')})
-                messages.success(request, 'Utilisateur cr?? !')
+                    return ajax_success_response(
+                        message='Utilisateur créé !',
+                        code="user_created",
+                        redirect=reverse('manage_users'),
+                    )
+                messages.success(request, 'Utilisateur créé !')
                 return redirect('manage_users')
         if is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+            return ajax_form_error_response(form)
     else:
         form = ChurchUserCreateForm()
 
@@ -707,11 +716,15 @@ def assign_user(request):
                 form.add_error(None, exc)
             else:
                 if is_ajax(request):
-                    return JsonResponse({'success': True, 'message': 'Utilisateur assigné !', 'redirect': reverse('manage_users')})
+                    return ajax_success_response(
+                        message='Utilisateur assigné !',
+                        code="user_assigned",
+                        redirect=reverse('manage_users'),
+                    )
                 messages.success(request, 'Utilisateur assigné !')
                 return redirect('manage_users')
         if is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+            return ajax_form_error_response(form)
     else:
         form = ChurchMembershipAssignForm(church=church)
 
@@ -736,18 +749,22 @@ def invite_user(request):
         if throttle_result.limited:
             message = build_rate_limit_message(throttle_result.retry_after_seconds)
             if is_ajax(request):
-                return JsonResponse({'success': False, 'message': message}, status=429)
+                return ajax_error_response(message=message, code="rate_limited", http_status=429)
             messages.error(request, message)
             return redirect('manage_users')
         form = ChurchInvitationForm(request.POST, church=church, invited_by=request.user)
         if form.is_valid():
             create_invitation_from_form(request=request, actor=request.user, church=church, form=form)
             if is_ajax(request):
-                return JsonResponse({'success': True, 'message': "Invitation envoyée.", 'redirect': reverse('manage_users')})
+                return ajax_success_response(
+                    message="Invitation envoyée.",
+                    code="invitation_sent",
+                    redirect=reverse('manage_users'),
+                )
             messages.success(request, "Invitation envoyée.")
             return redirect('manage_users')
         if is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+            return ajax_form_error_response(form)
     else:
         form = ChurchInvitationForm(church=church, invited_by=request.user)
 
@@ -849,11 +866,15 @@ def transfer_admin(request):
                 target_membership_id=form.cleaned_data['membership'].pk,
             )
             if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Administrateur transféré.', 'redirect': reverse('manage_users')})
+                return ajax_success_response(
+                    message='Administrateur transféré.',
+                    code="admin_transferred",
+                    redirect=reverse('manage_users'),
+                )
             messages.success(request, "Administrateur transféré.")
             return redirect('manage_users')
         if is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+            return ajax_form_error_response(form)
 
     return render(request, 'admin_dashboard/transfer_admin.html', {
         'church': church,
@@ -885,11 +906,15 @@ def edit_membership(request, pk):
                 form.add_error(None, exc)
             else:
                 if is_ajax(request):
-                    return JsonResponse({'success': True, 'message': 'Rôle mis à jour !', 'redirect': reverse('manage_users')})
+                    return ajax_success_response(
+                        message='Rôle mis à jour !',
+                        code="membership_updated",
+                        redirect=reverse('manage_users'),
+                    )
                 messages.success(request, 'Rôle mis à jour !')
                 return redirect('manage_users')
         if is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+            return ajax_form_error_response(form)
     else:
         form = ChurchMembershipUpdateForm(instance=membership)
 
@@ -959,25 +984,25 @@ def read_message(request, pk):
         if action == 'mark_read':
             msg = mark_message_as_read(msg)
             if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Message marqué comme lu.'})
+                return ajax_success_response(message='Message marqué comme lu.', code="message_marked_read")
             messages.success(request, 'Message marqué comme lu.')
             return redirect('read_message', pk=pk)
         if action == 'archive':
             msg = archive_message(msg)
             if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Message archivé.'})
+                return ajax_success_response(message='Message archivé.', code="message_archived")
             messages.success(request, 'Message archivé.')
             return redirect('read_message', pk=pk)
         if action == 'assign_me':
             msg = assign_message_to_user(message=msg, user=request.user)
             if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Message assigné.'})
+                return ajax_success_response(message='Message assigné.', code="message_assigned")
             messages.success(request, 'Message assigné.')
             return redirect('read_message', pk=pk)
         if action == 'unassign':
             msg = unassign_message(msg)
             if is_ajax(request):
-                return JsonResponse({'success': True, 'message': 'Assignation retirée.'})
+                return ajax_success_response(message='Assignation retirée.', code="message_unassigned")
             messages.success(request, "Assignation retirée.")
             return redirect('read_message', pk=pk)
         if action == 'respond':
@@ -986,14 +1011,14 @@ def read_message(request, pk):
                 response_result = respond_to_message(actor=request.user, message=msg, reply_form=reply_form)
                 msg = response_result.message
                 if is_ajax(request):
-                    return JsonResponse({'success': True, 'message': 'Réponse enregistrée.'})
+                    return ajax_success_response(message='Réponse enregistrée.', code="message_responded")
                 messages.success(request, 'Réponse enregistrée.')
                 return redirect('read_message', pk=pk)
             if is_ajax(request):
-                return JsonResponse({'success': False, 'errors': reply_form.errors}, status=400)
+                return ajax_form_error_response(reply_form)
         else:
             if is_ajax(request):
-                return JsonResponse({'success': False, 'message': 'Action invalide.'}, status=400)
+                return ajax_error_response(message='Action invalide.', code="invalid_action", http_status=400)
             messages.error(request, "Action invalide.")
             return redirect('read_message', pk=pk)
     return render(request, 'admin_dashboard/read_message.html', {

@@ -126,6 +126,70 @@ def _get_choice_param(request, key, allowed):
     return value if value in allowed else ''
 
 
+def build_ajax_payload(*, success, message="", code="", data=None, errors=None, redirect=None):
+    """Build the shared AJAX response payload used across dashboard and public views."""
+    return {
+        "status": "success" if success else "error",
+        "success": success,
+        "message": message,
+        "code": code,
+        "data": data or {},
+        "errors": errors or {},
+        "redirect": redirect,
+    }
+
+
+def ajax_response(*, success, message="", code="", data=None, errors=None, redirect=None, http_status=200):
+    """Return a JSON response that follows the project-wide AJAX contract."""
+    return JsonResponse(
+        build_ajax_payload(
+            success=success,
+            message=message,
+            code=code,
+            data=data,
+            errors=errors,
+            redirect=redirect,
+        ),
+        status=http_status,
+    )
+
+
+def ajax_success_response(*, message="", code="ok", data=None, redirect=None, http_status=200):
+    """Return a successful AJAX response with the shared envelope."""
+    return ajax_response(
+        success=True,
+        message=message,
+        code=code,
+        data=data,
+        redirect=redirect,
+        http_status=http_status,
+    )
+
+
+def ajax_error_response(*, message="", code="error", data=None, errors=None, redirect=None, http_status=400):
+    """Return a failed AJAX response with the shared envelope."""
+    return ajax_response(
+        success=False,
+        message=message,
+        code=code,
+        data=data,
+        errors=errors,
+        redirect=redirect,
+        http_status=http_status,
+    )
+
+
+def ajax_form_error_response(form, *, message="Veuillez corriger les erreurs du formulaire.", code="validation_error", http_status=400):
+    """Return a validation error response using structured form errors."""
+    errors = form.errors.get_json_data() if hasattr(form.errors, "get_json_data") else form.errors
+    return ajax_error_response(
+        message=message,
+        code=code,
+        errors=errors,
+        http_status=http_status,
+    )
+
+
 def _build_invite_url(request, invite):
     return request.build_absolute_uri(reverse('accept_invite', args=[invite.token]))
 
@@ -270,7 +334,7 @@ def _handle_church_form(
                 if object_name and instance is not None:
                     context[object_name] = instance
                 if is_ajax(request):
-                    return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+                    return ajax_form_error_response(form, message="Corrigez les erreurs du formulaire.", code="validation_error")
                 return render(request, template_name, context)
             obj.save()
             if hasattr(form, 'save_m2m'):
@@ -289,15 +353,15 @@ def _handle_church_form(
             if after_save:
                 after_save(obj, is_created)
             if is_ajax(request):
-                return JsonResponse({
-                    'success': True,
-                    'message': success_message,
-                    'redirect': reverse(success_url_name),
-                })
+                return ajax_success_response(
+                    message=success_message,
+                    code=f"{action}_{obj.__class__.__name__.lower()}",
+                    redirect=reverse(success_url_name),
+                )
             messages.success(request, success_message)
             return redirect(success_url_name)
         if is_ajax(request):
-            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+            return ajax_form_error_response(form)
     else:
         form = form_class(instance=instance)
 
@@ -330,6 +394,9 @@ def _handle_church_delete(request, model, pk, success_message, success_url_name,
             logger.error("Failed to log audit for delete action", exc_info=True)
         obj.delete()
         if is_ajax(request):
-            return JsonResponse({'success': True, 'message': success_message})
+            return ajax_success_response(
+                message=success_message,
+                code=f"delete_{model.__name__.lower()}",
+            )
         messages.success(request, success_message)
     return redirect(success_url_name)
