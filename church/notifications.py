@@ -93,16 +93,16 @@ def resolve_contact_recipient_groups(church, title, body="", source_text=""):
     return primary_recipients, escalation_recipients
 
 
-def notify_contact_recipients(church, category, title, body="", link="", source_text="", exclude=None):
-    """Notify the primary contact recipients for an inbound public message."""
-    primary_recipients, escalation_recipients = resolve_contact_recipient_groups(
-        church,
-        title,
-        body=body,
-        source_text=source_text,
-    )
-    recipients = list(dict.fromkeys([*primary_recipients, *escalation_recipients]))
-
+def notify_contact_recipients(church, category, title, body="", link="", recipients=None, source_text="", exclude=None):
+    """Notify the selected public-contact recipients without recomputing routing."""
+    if recipients is None:
+        primary_recipients, escalation_recipients = resolve_contact_recipient_groups(
+            church,
+            title,
+            body=body,
+            source_text=source_text,
+        )
+        recipients = list(dict.fromkeys([*primary_recipients, *escalation_recipients]))
     notify_users(recipients, church, category, title, body, link, exclude=exclude)
     return recipients
 

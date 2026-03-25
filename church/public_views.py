@@ -203,7 +203,7 @@ def church_contact(request, church_slug):
                     title="Nouveau message reçu",
                     body=f"{message.sender_name} - {message.subject or 'Sans sujet'}",
                     link=reverse('read_message', args=[message.pk]),
-                    source_text=message.message,
+                    recipients=[*primary_recipients, *escalation_recipients],
                 )
                 enqueue_contact_email_job(
                     message,
