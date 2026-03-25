@@ -218,7 +218,7 @@ class BrowserJourneyTests(StaticLiveServerTestCase):
             page.locator('input[name="title"]').fill("Conference jeunesse")
             page.locator('input[name="event_date"]').fill(str(date.today() + timedelta(days=30)))
             page.locator('input[name="location"]').fill("Salle polyvalente")
-            page.get_by_role("button", name="Cr?er").click()
+            page.locator('form[data-ajax] button[type="submit"]').click()
             page.wait_for_url("**/dashboard/evenements/")
 
             self.assertTrue(
