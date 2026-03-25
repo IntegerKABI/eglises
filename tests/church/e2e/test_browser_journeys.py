@@ -182,7 +182,7 @@ class BrowserJourneyTests(StaticLiveServerTestCase):
         page.goto(f"{self.live_server_url}/login/")
         page.locator('input[name="username"]').fill(username)
         page.locator('input[name="password"]').fill(password)
-        page.locator('button[type="submit"]').click()
+        page.get_by_role("button", name="Se connecter").click()
         page.wait_for_load_state("networkidle")
 
     def test_public_pages_render_with_pagination_in_browser(self):
@@ -218,7 +218,7 @@ class BrowserJourneyTests(StaticLiveServerTestCase):
             page.locator('input[name="title"]').fill("Conference jeunesse")
             page.locator('input[name="event_date"]').fill(str(date.today() + timedelta(days=30)))
             page.locator('input[name="location"]').fill("Salle polyvalente")
-            page.locator('button[type="submit"]').click()
+            page.get_by_role("button", name="Cr?er").click()
             page.wait_for_url("**/dashboard/evenements/")
 
             self.assertTrue(
@@ -235,7 +235,7 @@ class BrowserJourneyTests(StaticLiveServerTestCase):
             page.wait_for_url("**/invitations/")
             page.locator(f'a[href="/invite/{self.accept_invitation.token}/"]').click()
             page.wait_for_url(f"**/invite/{self.accept_invitation.token}/")
-            page.locator('button[type="submit"]').click()
+            page.get_by_role("button", name="Accepter").click()
             page.wait_for_load_state("networkidle")
 
             self.accept_invitation.refresh_from_db()
