@@ -22,7 +22,7 @@ Le modèle métier est centré sur `Church` comme tenant principal. Les accès s
 - Python 3.12+
 - Django 5.1+
 - PostgreSQL comme base principale
-- SQLite comme fallback local si aucune configuration PostgreSQL n'est fournie
+- PostgreSQL uniquement
 - Bootstrap 5
 - django-crispy-forms + crispy-bootstrap5
 - WhiteNoise pour les fichiers statiques
@@ -146,11 +146,11 @@ Autres composants importants :
 
 ### Mode recommandé
 
-Le projet est PostgreSQL-first. En pratique :
+Le projet est PostgreSQL uniquement. En pratique :
 
 - si `DATABASE_URL` est défini, Django l'utilise
 - sinon, si `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` et `POSTGRES_HOST` sont définis, Django utilise PostgreSQL
-- sinon, Django retombe sur SQLite
+- sinon, le chargement de la configuration l'?ve une erreur explicite
 
 ### Variables de base
 

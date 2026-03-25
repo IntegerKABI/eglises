@@ -9,7 +9,7 @@
 
 ## Architecture
 - **Django project** with one app: `church/`. Project config in `eglise_saas_project/`.
-- **Database**: SQLite (`db.sqlite3`). Central model is `Church`; all others (Event, Sermon, Member, Page, ContactMessage) link to it via ForeignKey. `SiteSettings` is a singleton (pk=1).
+- **Database**: PostgreSQL only. Central model is `Church`; all others (Event, Sermon, Member, Page, ContactMessage) link to it via ForeignKey. `SiteSettings` is a singleton (pk=1).
 - **URLs**: Public site at `/eglise/<slug>/`, admin dashboard at `/dashboard/`, Django admin at `/admin/`.
 - **Templates**: `templates/` (root-level shared templates + `base.html`) and `church/templates/` (app-specific). Uses Bootstrap 5 via crispy-forms.
 - **Static/Media**: `static/` for CSS/JS/images; `media/` for user uploads.

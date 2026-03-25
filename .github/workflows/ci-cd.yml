@@ -5,39 +5,6 @@ on:
   pull_request:
 
 jobs:
-  test-sqlite:
-    runs-on: ubuntu-latest
-    env:
-      DJANGO_SETTINGS_MODULE: eglise_saas_project.settings.test
-      SECRET_KEY: ci-secret-key
-      DEBUG: "False"
-      ALLOWED_HOSTS: localhost,127.0.0.1,testserver
-      DATABASE_URL: ""
-      POSTGRES_DB: ""
-      POSTGRES_USER: ""
-      POSTGRES_PASSWORD: ""
-      POSTGRES_HOST: ""
-      POSTGRES_PORT: ""
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Validate migrations
-        run: python manage.py makemigrations --check --dry-run --settings=eglise_saas_project.settings.test
-
-      - name: Run SQLite test suite
-        run: python manage.py test --settings=eglise_saas_project.settings.test
-
   test-postgres:
     runs-on: ubuntu-latest
     services:
@@ -76,6 +43,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Install Playwright browser
+        run: python -m playwright install --with-deps chromium
 
       - name: Validate migrations
         run: python manage.py makemigrations --check --dry-run --settings=eglise_saas_project.settings.test

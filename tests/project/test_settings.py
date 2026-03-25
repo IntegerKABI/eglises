@@ -2,6 +2,7 @@ import os
 from importlib import import_module
 from unittest.mock import patch
 
+from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
 from eglise_saas_project.settings import base as project_settings
@@ -62,7 +63,21 @@ class SettingsHelpersTests(SimpleTestCase):
         self.assertEqual(config["CONN_MAX_AGE"], 300)
         self.assertTrue(config["CONN_HEALTH_CHECKS"])
 
-    def test_build_database_config_falls_back_to_sqlite(self):
+    def test_build_database_config_rejects_non_postgresql_database_url(self):
+        env = {
+            "DATABASE_URL": "sqlite:///tmp/test.sqlite3",
+            "POSTGRES_DB": "",
+            "POSTGRES_USER": "",
+            "POSTGRES_PASSWORD": "",
+            "POSTGRES_HOST": "",
+            "POSTGRES_PORT": "",
+        }
+
+        with patch.dict(os.environ, env, clear=False):
+            with self.assertRaises(ImproperlyConfigured):
+                project_settings._build_database_config()
+
+    def test_build_database_config_requires_postgresql_configuration(self):
         env = {
             "DATABASE_URL": "",
             "POSTGRES_DB": "",
@@ -73,10 +88,8 @@ class SettingsHelpersTests(SimpleTestCase):
         }
 
         with patch.dict(os.environ, env, clear=False):
-            config = project_settings._build_database_config()
-
-        self.assertEqual(config["ENGINE"], "django.db.backends.sqlite3")
-        self.assertTrue(str(config["NAME"]).endswith("db.sqlite3"))
+            with self.assertRaises(ImproperlyConfigured):
+                project_settings._build_database_config()
 
     def test_settings_profiles_are_importable(self):
         self.assertIsNotNone(import_module("eglise_saas_project.settings.development"))

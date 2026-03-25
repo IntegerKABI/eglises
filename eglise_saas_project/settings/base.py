@@ -57,13 +57,12 @@ def _env_log_level(name, default="INFO"):
 
 
 def _build_database_config():
-    """Build the default Django database configuration from environment variables."""
-    sqlite_url = f"sqlite:///{BASE_DIR / 'db.sqlite3'}"
+    """Build the PostgreSQL database configuration from environment variables."""
     database_url = os.environ.get("DATABASE_URL", "").strip()
     debug_enabled = _env_bool("DEBUG", default=False)
 
     if database_url:
-        return {
+        config = {
             **dj_database_url.parse(
                 database_url,
                 conn_max_age=_env_int("DATABASE_CONN_MAX_AGE", 600),
@@ -71,6 +70,10 @@ def _build_database_config():
             ),
             "CONN_HEALTH_CHECKS": True,
         }
+        engine = config.get("ENGINE", "")
+        if not engine.startswith("django.db.backends.postgresql"):
+            raise ImproperlyConfigured("DATABASE_URL must point to PostgreSQL.")
+        return config
 
     postgres_name = os.environ.get("POSTGRES_DB", "").strip()
     postgres_user = os.environ.get("POSTGRES_USER", "").strip()
@@ -79,6 +82,9 @@ def _build_database_config():
     postgres_port = os.environ.get("POSTGRES_PORT", "5432").strip() or "5432"
 
     if all([postgres_name, postgres_user, postgres_password, postgres_host]):
+        options = {}
+        if _env_bool("DATABASE_SSL_REQUIRE", default=False):
+            options["sslmode"] = "require"
         return {
             "ENGINE": "django.db.backends.postgresql",
             "NAME": postgres_name,
@@ -88,10 +94,13 @@ def _build_database_config():
             "PORT": postgres_port,
             "CONN_MAX_AGE": _env_int("DATABASE_CONN_MAX_AGE", 600),
             "CONN_HEALTH_CHECKS": True,
-            "OPTIONS": {},
+            "OPTIONS": options,
         }
 
-    return dj_database_url.parse(sqlite_url, conn_max_age=0)
+    raise ImproperlyConfigured(
+        "PostgreSQL configuration is required. Set DATABASE_URL or POSTGRES_DB, "
+        "POSTGRES_USER, POSTGRES_PASSWORD, and POSTGRES_HOST."
+    )
 
 
 _load_dotenv(BASE_DIR / ".env")

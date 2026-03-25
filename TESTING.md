@@ -24,9 +24,10 @@ After activation, every command in this guide should use `python`.
 env\Scripts\python.exe manage.py test --noinput
 ```
 
-## Local SQLite suite
+## Local PostgreSQL suite
 
 ```powershell
+python manage.py migrate
 python manage.py test --noinput
 ```
 
@@ -82,7 +83,4 @@ On Windows, the browser suite is skipped by default because some local environme
 
 ## CI coverage
 
-The GitHub Actions workflow runs three jobs:
-- SQLite regression suite
-- PostgreSQL regression suite, including the lock-sensitive invitation test
-- Browser journeys against PostgreSQL with Playwright Chromium
+The GitHub Actions workflow runs one PostgreSQL regression job that includes the lock-sensitive invitation test and the browser journeys with Playwright Chromium installed in the same runner.
